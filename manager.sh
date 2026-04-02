@@ -298,23 +298,26 @@ cmd_initialize() {
 
 # ── Phase 3 & 4: Service Catalog ──────────────────────────────────────────────
 
-# Service definitions: name|image|port|data_dir|extra_env|extra_ports|extra_volumes
+# Service definitions: name|image|port|data_dir|extra_env|extra_ports|extra_volumes|extra_args
 declare -A SERVICES
 SERVICES=(
   # Tier 1: Management
-  [homarr]="ghcr.io/homarr-labs/homarr:latest|7575|homarr|SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006||/var/run/docker.sock:/var/run/docker.sock,CFG_DIR/appdata:/appdata"
-  [portainer]="portainer/portainer-ce:latest|9000|portainer||8000:8000|/var/run/docker.sock:/var/run/docker.sock"
+  [homarr]="ghcr.io/homarr-labs/homarr:latest|7575|homarr|SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006||/var/run/docker.sock:/var/run/docker.sock|"
+  [portainer]="portainer/portainer-ce:latest|9000|portainer||8000:8000|/var/run/docker.sock:/var/run/docker.sock|"
 
   # Tier 2: Personal Cloud
-  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|8080:80|"
-  [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|8090:443|"
+  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|8080:80||"
+  [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|8090:443||"
 
   # Tier 3: Media
-  [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp|"
-  [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis||"
+  [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp||"
+  [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
 
   # Tier 4: Security Lab
-  [kali-lab]="kasmweb/kali-rolling-desktop:latest|6901|kali-lab|KASM_USER=kali,VNC_PW=kali-secure||"
+  [kali-lab]="lscr.io/linuxserver/kali-linux:latest|3000|kali-lab|PIXELFLUX_WAYLAND=true,DRINODE=/dev/dri/renderD128,DRI_NODE=/dev/dri/renderD128,PUID=1000,PGID=1000,TZ=Africa/Tunis|||--gpus all --device /dev/dri/renderD128:/dev/dri/renderD128 --shm-size 2gb"
+
+  # Tier 5: GPU Accelerated Cloud
+  [brave]="lscr.io/linuxserver/brave:latest|3000|brave|PIXELFLUX_WAYLAND=true,DRINODE=/dev/dri/renderD128,DRI_NODE=/dev/dri/renderD128,PUID=1000,PGID=1000,TZ=Africa/Tunis|||--gpus all --device /dev/dri/renderD128:/dev/dri/renderD128 --shm-size 2gb"
 )
 
 SERVICE_DESCRIPTIONS=(
@@ -325,7 +328,40 @@ SERVICE_DESCRIPTIONS=(
   [jellyfin]="Tier 3 · Media streaming server (Alpine)"
   [prowlarr]="Tier 3 · Indexer manager for media"
   [kali-lab]="Tier 4 · Security lab with browser VNC"
+  [brave]="Tier 5 · GPU-accelerated Brave Browser"
 )
+
+# Service requirements: RAM (MB) | Disk (MB)
+SERVICE_REQUIREMENTS=(
+  [homarr]="150|500"
+  [portainer]="100|500"
+  [filebrowser]="50|200"
+  [nextcloud]="512|2000"
+  [jellyfin]="768|2000"
+  [prowlarr]="256|500"
+  [kali-lab]="2048|5000"
+  [brave]="1024|2000"
+)
+
+check_resources() {
+  local required_ram=$1
+  local required_disk=$2
+  
+  local free_ram; free_ram=$(free -m | awk '/^Mem:/{print $7}')
+  local free_disk; free_disk=$(df -m / | awk 'NR==2{print $4}')
+
+  local ok=true
+  if (( free_ram < required_ram )); then
+    error "Insufficient RAM! Required: ${required_ram}MB, Available: ${free_ram}MB"
+    ok=false
+  fi
+  if (( free_disk < required_disk )); then
+    error "Insufficient Disk Space! Required: ${required_disk}MB, Available: ${free_disk}MB"
+    ok=false
+  fi
+  
+  [[ "$ok" == true ]] || return 1
+}
 
 is_port_free() {
   ! ss -tlnp | grep -q ":${1} "
@@ -334,10 +370,17 @@ is_port_free() {
 deploy_service() {
   local name=$1
   local def="${SERVICES[$name]}"
-  IFS='|' read -r image default_port _unused extra_env extra_ports extra_volumes <<< "$def"
+  IFS='|' read -r image default_port _unused extra_env extra_ports extra_volumes extra_args <<< "$def"
 
   local cfg_dir="${CONFIG_BASE}/${name}"
   local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
+  local reqs="${SERVICE_REQUIREMENTS[$name]:-256|1000}"
+
+  # Pre-Flight Resource Check
+  if ! check_resources "${reqs%%|*}" "${reqs##*|}"; then
+    warn "Deployment aborted due to lack of VPS resources."
+    return 1
+  fi
 
   # Check if already deployed
   if [[ "$(state_get ".services.${name}.status")" == "running" ]]; then
@@ -373,6 +416,11 @@ deploy_service() {
   local run_cmd=(docker run -d --name "$name" --restart unless-stopped)
   run_cmd+=(--network "$PROXY_NETWORK")
   run_cmd+=(-p "${port}:${default_port}")
+  
+  if [[ -n "$extra_args" ]]; then
+    read -ra args_arr <<< "$extra_args"
+    run_cmd+=("${args_arr[@]}")
+  fi
   
   if [[ -n "$extra_ports" ]]; then
     IFS=',' read -ra port_arr <<< "$extra_ports"
@@ -417,15 +465,31 @@ deploy_service() {
 
 cmd_up() {
   show_header
-  label "Service Catalog"
+  label "Service Catalog & Smart Deployment"
   echo
 
+  local free_ram; free_ram=$(free -m | awk '/^Mem:/{print $7}')
   local i=1
   declare -a menu_keys
+  
   for key in "${!SERVICES[@]}"; do
     menu_keys+=("$key")
     local desc="${SERVICE_DESCRIPTIONS[$key]:-}"
-    printf "  ${MAUVE}%2d)${NC} ${BOLD}%-15s${NC} ${DIM}${SUBTEXT}%s${NC}\n" "$i" "$key" "$desc"
+    local reqs="${SERVICE_REQUIREMENTS[$key]:-256|1000}"
+    local req_ram="${reqs%%|*}"
+    
+    local tag=""
+    local tag_color=$NC
+    
+    if [[ "$(state_get ".services.${key}.status")" == "running" ]]; then
+      tag="[RUNNING]"
+      tag_color=$GREEN
+    elif (( free_ram < req_ram )); then
+      tag="[OUT OF RAM]"
+      tag_color=$RED
+    fi
+    
+    printf "  ${MAUVE}%2d)${NC} ${BOLD}%-15s${NC} ${DIM}${SUBTEXT}%-40s${NC} ${tag_color}%s${NC}\n" "$i" "$key" "$desc" "$tag"
     (( i++ ))
   done
 
@@ -580,6 +644,45 @@ cmd_doctor() {
   pause
 }
 
+cmd_purge() {
+  show_header
+  label "NUCLEAR PURGE  —  Destroy Setup"
+  echo
+
+  warn "WARNING: This will DESTROY all deployed containers, delete all configurations"
+  warn "in ${CONFIG_BASE}, remove the docker network, and erase the script state!"
+  echo
+
+  if confirm "Are you ABSOLUTELY sure you want to PURGE EVERYTHING?"; then
+    info "Stopping and removing managed containers..."
+    docker rm -f nginx-proxy-manager &>> "$LOG_FILE" || true
+    for srv in "${!SERVICES[@]}"; do
+      docker rm -f "$srv" &>> "$LOG_FILE" || true
+    done
+
+    info "Removing Docker network (${PROXY_NETWORK})..."
+    docker network rm "$PROXY_NETWORK" &>> "$LOG_FILE" || true
+
+    if confirm "Delete ALL configurations? (Removes ${CONFIG_BASE})"; then
+      rm -rf "$CONFIG_BASE"
+      success "Configuration directory removed."
+    fi
+
+    if confirm "Delete ALL media? (Removes ${MEDIA_DIR})"; then
+      sudo rm -rf "$MEDIA_DIR"
+      success "Media directory destroyed."
+    fi
+
+    info "Resetting script state..."
+    rm -f "$STATE_FILE"
+    
+    success "System successfully purged. You can now start fresh."
+  else
+    warn "Purge aborted."
+  fi
+  pause
+}
+
 cmd_clean() {
   show_header
   label "Prune Unused Docker Assets"
@@ -619,6 +722,7 @@ main_menu() {
     printf "  ${GREEN}4)${NC} ${BOLD}Health Dashboard${NC}         ${DIM}${SUBTEXT}Status + resources${NC}\n"
     printf "  ${SAPPHIRE}5)${NC} ${BOLD}System Doctor${NC}            ${DIM}${SUBTEXT}Audit + security${NC}\n"
     printf "  ${YELLOW}6)${NC} ${BOLD}Prune & Clean${NC}            ${DIM}${SUBTEXT}Free up disk${NC}\n"
+    printf "  ${MAROON}7)${NC} ${BOLD}Nuclear Purge${NC}            ${DIM}${SUBTEXT}Destroy & reset setup${NC}\n"
     printf "  ${RED}0)${NC} Exit\n"
     echo
     prompt "Select" CHOICE
@@ -630,6 +734,7 @@ main_menu() {
       4) cmd_status    ;;
       5) cmd_doctor    ;;
       6) cmd_clean     ;;
+      7) cmd_purge     ;;
       0) echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"; exit 0 ;;
       *) error "Invalid option."; sleep 1 ;;
     esac
@@ -654,11 +759,12 @@ case "${1:-}" in
   status) cmd_status  ;;
   doctor) cmd_doctor  ;;
   clean)  cmd_clean   ;;
+  purge)  cmd_purge   ;;
   init)   cmd_initialize ;;
   --child|"") main_menu ;;
   *)
     echo -e "\n  ${BOLD}Usage:${NC} ./manager.sh [command]\n"
-    echo -e "  Commands: up | down <name> | status | doctor | clean | init"
+    echo -e "  Commands: up | down <name> | status | doctor | clean | purge | init"
     echo
     exit 1
     ;;

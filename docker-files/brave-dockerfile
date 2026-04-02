@@ -1,5 +1,6 @@
-FROM lscr.io/linuxserver/kali-linux:latest
+FROM lscr.io/linuxserver/brave:latest
 
+# Basic parameters
 ENV PUID=1000
 ENV PGID=1000
 ENV TZ=Africa/Tunis
@@ -9,5 +10,6 @@ ENV PIXELFLUX_WAYLAND=true
 ENV DRINODE=/dev/dri/renderD128
 ENV DRI_NODE=/dev/dri/renderD128
 
+# Standard interfaces (HTTP, HTTPS KasmVNC)
 EXPOSE 3000
 EXPOSE 3001
