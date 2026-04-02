@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 #  VPS Backup & Restore Utility  |  backup.sh
-#  Purpose: Snapshot and Rollback server configurations and state
+#  Purpose: Configuration Snapshots & Full System Backups (Timeshift Style)
 # ==============================================================================
 set -euo pipefail
 
@@ -28,31 +28,63 @@ mkdir -p "$BACKUP_DIR"
 info()    { echo -e "  ${SKY}›${NC} ${1}"; }
 success() { echo -e "  ${GREEN}✔${NC} ${1}"; }
 error()   { echo -e "  ${RED}✖${NC} ${1}" >&2; }
+warn()    { echo -e "  ${YELLOW}⚠${NC} ${1}"; }
 die()     { error "$1"; exit 1; }
 
 # ── Actions ───────────────────────────────────────────────────────────────────
 
-cmd_backup() {
+cmd_config_backup() {
   local timestamp; timestamp=$(date +%Y%m%d_%H%M%S)
-  local backup_name="vps_snapshot_${timestamp}.tar.gz"
+  local backup_name="config_snapshot_${timestamp}.tar.gz"
   local target_path="${BACKUP_DIR}/${backup_name}"
 
-  info "Creating system snapshot..."
+  info "Creating config-only snapshot..."
   
   if [[ ! -f "$STATE_FILE" ]] && [[ ! -d "$CONFIG_BASE" ]]; then
     die "Nothing to backup! No state file or config directory found."
   fi
-
-  # Stop any running docker operations to ensure config consistency (optional but safer)
-  # info "Note: This captures the current files on disk."
 
   tar -czf "$target_path" \
       -C "$SCRIPT_DIR" ".vps_state.json" \
       -C "$HOME" ".config/personal-server" \
       2>/dev/null || true
 
-  success "${BOLD}Backup created:${NC} ${backup_name}"
-  info "Saved to: ${target_path}"
+  success "${BOLD}Config backup created:${NC} ${backup_name}"
+}
+
+cmd_system_backup() {
+  local timestamp; timestamp=$(date +%Y%m%d_%H%M%S)
+  local backup_name="system_full_${timestamp}.tar.gz"
+  local target_path="${BACKUP_DIR}/${backup_name}"
+  
+  info "Preparing FULL SYSTEM snapshot (Timeshift style)..."
+  warn "This will capture the entire OS root (excluding media/tmp)."
+  
+  # Get sudo early
+  sudo -v
+
+  local exclude_file; exclude_file=$(mktemp)
+  cat > "$exclude_file" <<EOF
+/proc/*
+/sys/*
+/dev/*
+/run/*
+/tmp/*
+/var/tmp/*
+/var/lib/docker/containers/*
+/var/lib/docker/overlay2/*
+/mnt/*
+/media/*
+${BACKUP_DIR}/*
+/swapfile
+/lost+found
+EOF
+
+  info "Starting compression... this may take a few minutes."
+  sudo tar -czpf "$target_path" --exclude-from="$exclude_file" / 2>/dev/null || true
+  
+  rm -f "$exclude_file"
+  success "${BOLD}Full system backup created:${NC} ${backup_name}"
 }
 
 cmd_restore() {
@@ -63,17 +95,19 @@ cmd_restore() {
   fi
 
   echo
-  echo -e "  ${MAUVE}${BOLD}Available Backups (Newest First):${NC}"
+  echo -e "  ${MAUVE}${BOLD}Available Snapshots:${NC}"
   echo -e "  ${SUBTEXT}─────────────────────────────────${NC}"
   
   local i=1
   for b in "${backups[@]}"; do
-    printf "  ${MAUVE}%2d)${NC} %s\n" "$i" "$(basename "$b")"
+    local label="[Config]"
+    [[ "$(basename "$b")" == system_* ]] && label="[SYSTEM]"
+    printf "  ${MAUVE}%2d)${NC} %-10s %s\n" "$i" "$label" "$(basename "$b")"
     ((i++))
   done
   echo
 
-  printf "  ${MAUVE}?${NC} ${BOLD}Select backup to RESTORE (or 0 to cancel)${NC}: "
+  printf "  ${MAUVE}?${NC} ${BOLD}Select snapshot to RESTORE (or 0 to cancel)${NC}: "
   read -r choice
 
   if [[ "$choice" == "0" || -z "$choice" ]]; then return; fi
@@ -83,31 +117,27 @@ cmd_restore() {
   
   [[ -n "$selected" ]] || die "Invalid selection."
 
-  echo -e "  ${RED}${BOLD}WARNING:${NC} This will overwrite current configs and rollback status!"
+  warn "This will overwrite your current environment with data from $(basename "$selected")"
   printf "  ${YELLOW}?${NC} ${BOLD}Proceed with rollback?${NC} [y/n]: "
   read -r ans
   [[ "$ans" =~ ^[Yy]$ ]] || die "Restore aborted."
 
-  info "Stopping all containers before restore..."
-  docker stop $(docker ps -q) &>/dev/null || true
-
-  info "Extracting snapshot..."
-  # Clean current state to avoid conflicts
-  rm -f "$STATE_FILE"
-  rm -rf "$CONFIG_BASE"
-
-  # Extract configs and state
-  tar -xzf "$selected" -C "$SCRIPT_DIR" ".vps_state.json"
-  mkdir -p "$CONFIG_BASE"
-  tar -xzf "$selected" -C "$HOME" ".config/personal-server"
-
-  success "${BOLD}Rollback successful!${NC}"
-  info "System state restored to: $(basename "$selected")"
-  echo
-  warn "Run './manager.sh status' to check which services to restart."
+  if [[ "$(basename "$selected")" == system_* ]]; then
+    info "Initiating FULL SYSTEM restore..."
+    warn "This is a major operation. Ensure you are connected via SSH."
+    sudo tar -xzpf "$selected" -C /
+    success "System restoration complete. Rebooting is recommended."
+  else
+    info "Restoring configuration state..."
+    docker stop $(docker ps -q) &>/dev/null || true
+    rm -f "$STATE_FILE"
+    rm -rf "$CONFIG_BASE"
+    tar -xzf "$selected" -C "$SCRIPT_DIR" ".vps_state.json"
+    mkdir -p "$CONFIG_BASE"
+    tar -xzf "$selected" -C "$HOME" ".config/personal-server"
+    success "Config state restored."
+  fi
 }
-
-warn() { echo -e "  ${YELLOW}⚠${NC} ${1}"; }
 
 # ── Main Menu ─────────────────────────────────────────────────────────────────
 
@@ -121,16 +151,18 @@ show_header() {
 
 main() {
   show_header
-  echo -e "  ${MAUVE}1)${NC} ${BOLD}Create Snapshot${NC}   ${DIM}(Backup)${NC}"
-  echo -e "  ${MAUVE}2)${NC} ${BOLD}Rollback State${NC}    ${DIM}(Restore)${NC}"
+  echo -e "  ${MAUVE}1)${NC} ${BOLD}Config Snapshot${NC}     ${DIM}(Fast, apps only)${NC}"
+  echo -e "  ${MAUVE}2)${NC} ${BOLD}Full System Backup${NC}  ${DIM}(Timeshift style)${NC}"
+  echo -e "  ${MAUVE}3)${NC} ${BOLD}Rollback / Restore${NC}"
   echo -e "  ${MAUVE}0)${NC} Exit"
   echo
   printf "  ${MAUVE}?${NC} ${BOLD}Selection${NC}: "
   read -r CHOICE
 
   case "${CHOICE:-}" in
-    1) cmd_backup ;;
-    2) cmd_restore ;;
+    1) cmd_config_backup ;;
+    2) cmd_system_backup ;;
+    3) cmd_restore ;;
     0) exit 0 ;;
     *) error "Invalid option." ; sleep 1; main ;;
   esac
@@ -138,7 +170,8 @@ main() {
 
 # CLI support
 case "${1:-}" in
-  backup)  cmd_backup ;;
+  config) cmd_config_backup ;;
+  system) cmd_system_backup ;;
   restore) cmd_restore ;;
   *)       main ;;
 esac
