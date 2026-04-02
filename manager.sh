@@ -320,6 +320,7 @@ SERVICES=(
   [brave]="lscr.io/linuxserver/brave:latest|3000|brave|PIXELFLUX_WAYLAND=true,DRINODE=/dev/dri/renderD128,DRI_NODE=/dev/dri/renderD128,PUID=1000,PGID=1000,TZ=Africa/Tunis|||--gpus all --device /dev/dri/renderD128:/dev/dri/renderD128 --shm-size 2gb"
 )
 
+declare -A SERVICE_DESCRIPTIONS
 SERVICE_DESCRIPTIONS=(
   [homarr]="Tier 1 · Lightweight home dashboard"
   [portainer]="Tier 1 · Docker container visualizer"
@@ -332,6 +333,7 @@ SERVICE_DESCRIPTIONS=(
 )
 
 # Service requirements: RAM (MB) | Disk (MB)
+declare -A SERVICE_REQUIREMENTS
 SERVICE_REQUIREMENTS=(
   [homarr]="150|500"
   [portainer]="100|500"
