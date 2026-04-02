@@ -62,7 +62,7 @@ info()    { echo -e "  ${SKY}${ARR}${NC} ${TEXT}${1}${NC}"; echo "[INFO]    $(da
 success() { echo -e "  ${GREEN}${OK}${NC} ${TEXT}${1}${NC}"; echo "[SUCCESS] $(date '+%F %T') | ${1}" >> "$LOG_FILE"; }
 warn()    { echo -e "  ${YELLOW}${WARN}${NC} ${TEXT}${1}${NC}"; echo "[WARN]    $(date '+%F %T') | ${1}" >> "$LOG_FILE"; }
 error()   { echo -e "  ${RED}${ERR}${NC} ${TEXT}${1}${NC}" >&2; echo "[ERROR]   $(date '+%F %T') | ${1}" >> "$LOG_FILE"; }
-die()     { error "$1"; exit 1; }
+die()     { error "$1"; pause; exit 1; }
 
 prompt()  {
   local msg=$1 var=$2
@@ -156,7 +156,7 @@ validate_os() {
 }
 
 install_deps() {
-  local deps=("curl" "git" "jq" "gawk" "openssl" "ufw")
+  local deps=("curl" "git" "jq" "gawk" "openssl" "ufw" "acl")
   local missing=()
   for dep in "${deps[@]}"; do
     command -v "$dep" &>/dev/null || missing+=("$dep")
@@ -223,7 +223,12 @@ https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
     sudo systemctl enable --now docker"
 
   sudo usermod -aG docker "$USER"
-  success "Docker Engine V2 installed."
+  # Apply group change immediately so docker works without sudo
+  if command -v setfacl &>/dev/null; then
+    info "Applying immediate Docker permissions via setfacl..."
+    sudo setfacl -m user:"$USER":rw /var/run/docker.sock 2>/dev/null || true
+  fi
+  success "Docker Engine V2 installed. Docker now runs without sudo."
   state_set ".docker_installed" "true"
 }
 
@@ -521,7 +526,7 @@ cmd_up() {
   separator
   prompt "Select service number (or 0 to cancel)" choice
 
-  if [[ "$choice" == "0" || -z "$choice" ]]; then return; fi
+  if [[ "$choice" == "0" || -z "$choice" ]]; then pause; return; fi
 
   local idx=$(( choice - 1 ))
   local selected="${menu_keys[$idx]:-}"
@@ -544,7 +549,7 @@ cmd_down() {
     prompt "Container name to stop & remove" target
   fi
 
-  [[ -z "$target" ]] && return
+  [[ -z "$target" ]] && { pause; return; }
 
   if confirm "Stop and remove '${target}'?"; then
     run_task "Removing container ${target}" "docker rm -f $target"
