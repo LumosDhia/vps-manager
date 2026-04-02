@@ -1,0 +1,13 @@
+# VPS Setup - .gitignore
+.vps_state.json
+manager.log
+*.log
+tests/
+run_tests.sh
+tmp/
+PYEOF
+PYEOF.sh
+mgr_test_*.sh
+manager_test_*.sh
+vps_state_*.json
+vps_log_*.log
