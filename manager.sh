@@ -77,9 +77,41 @@ confirm() {
   [[ "$ans" =~ ^[Yy]$ ]]
 }
 
-pause() { echo; printf "  ${DIM}${SUBTEXT}Press Enter to continue...${NC}"; read -r; }
+pause() {
+  echo
+  echo -e "  ${GREEN}${BOLD}Finished!${NC} ${TEXT}Task completed successfully.${NC}"
+  printf "  ${MAUVE}──${NC} ${BOLD}Press Enter to go back to main or 0 to close${NC}: "
+  read -r choice
+  [[ "$choice" == "0" ]] && { echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"; exit 0; }
+}
 
 separator() { echo -e "  ${DIM}${SUBTEXT}────────────────────────────────────────────────${NC}"; }
+
+# ── Enhanced Command Execution ──────────────────────────────────────────────
+run_task() {
+  local msg="$1"
+  local cmd="$2"
+  
+  info "$msg..."
+  echo -e "  ${DIM}┌────────────────────────────────────────────────────────┐${NC}"
+  
+  # Set +e to handle failures ourselves
+  set +e
+  # Execute and indent output
+  eval "$cmd" 2>&1 | while IFS= read -r line; do
+    printf "  ${DIM}│${NC} %-54s ${DIM}│${NC}\n" "${line:0:54}"
+  done
+  local exit_code=${PIPESTATUS[0]}
+  set -e
+
+  if [[ $exit_code -eq 0 ]]; then
+    echo -e "  ${DIM}└────────────────────────────────────────────────────────┘${NC}"
+    return 0
+  else
+    echo -e "  ${RED}└──────────────────────────────────────────── FAILED ────┘${NC}"
+    return $exit_code
+  fi
+}
 
 # ── State Management ──────────────────────────────────────────────────────────
 state_init() {
@@ -130,9 +162,7 @@ install_deps() {
     command -v "$dep" &>/dev/null || missing+=("$dep")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
-    info "Installing missing dependencies: ${missing[*]}"
-    sudo apt-get update -qq &>> "$LOG_FILE"
-    sudo apt-get install -y "${missing[@]}" &>> "$LOG_FILE"
+    run_task "Installing missing dependencies" "sudo apt-get update -qq && sudo apt-get install -y ${missing[*]}"
   fi
   success "All dependencies satisfied."
 }
@@ -188,12 +218,10 @@ install_docker() {
 https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
     | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-  sudo apt-get update -qq &>> "$LOG_FILE"
-  sudo apt-get install -y \
-    docker-ce docker-ce-cli containerd.io \
-    docker-buildx-plugin docker-compose-plugin &>> "$LOG_FILE"
+  run_task "Installing Docker Engine" "sudo apt-get update -qq && \
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
+    sudo systemctl enable --now docker"
 
-  sudo systemctl enable --now docker &>> "$LOG_FILE"
   sudo usermod -aG docker "$USER"
   success "Docker Engine V2 installed."
   state_set ".docker_installed" "true"
@@ -203,8 +231,7 @@ setup_network() {
   if docker network inspect "$PROXY_NETWORK" &>/dev/null; then
     success "Docker network '${PROXY_NETWORK}' already exists."
   else
-    info "Creating isolated Docker network '${PROXY_NETWORK}'..."
-    docker network create "$PROXY_NETWORK" &>> "$LOG_FILE"
+    run_task "Creating isolated Docker network '${PROXY_NETWORK}'" "docker network create $PROXY_NETWORK"
     success "Network '${PROXY_NETWORK}' created."
   fi
 }
@@ -218,7 +245,7 @@ setup_firewall() {
   sudo ufw allow "$ssh_port"/tcp &>> "$LOG_FILE"
   sudo ufw allow 80/tcp  &>> "$LOG_FILE"
   sudo ufw allow 443/tcp &>> "$LOG_FILE"
-  sudo ufw --force enable &>> "$LOG_FILE"
+  run_task "Enabling Firewal" "sudo ufw --force enable"
   success "Firewall configured."
 }
 
@@ -234,26 +261,23 @@ deploy_reverse_proxy() {
 
   local active_image="jc21/nginx-proxy-manager:latest"
   if [[ -f "$custom_df" ]]; then
-    info "Prioritizing custom Dockerfile for Nginx Proxy Manager..."
-    docker build -t "local-nginx-proxy-manager:latest" -f "$custom_df" "$DOCKER_FILES_DIR" &>> "$LOG_FILE"
+    run_task "Building custom Nginx Proxy Manager image" "docker build -t local-nginx-proxy-manager:latest -f $custom_df $DOCKER_FILES_DIR"
     active_image="local-nginx-proxy-manager:latest"
   else
-    info "Pulling generic image for Nginx Proxy Manager..."
-    docker pull "$active_image" &>> "$LOG_FILE" || true
+    run_task "Pulling generic Nginx Proxy Manager image" "docker pull $active_image"
   fi
 
-  info "Deploying Nginx Proxy Manager (Entry Gate)..."
-  docker run -d \
+  run_task "Deploying Nginx Proxy Manager container" "docker run -d \
     --name nginx-proxy-manager \
     --restart unless-stopped \
-    --network "$PROXY_NETWORK" \
+    --network $PROXY_NETWORK \
     -p 80:80 \
     -p 81:81 \
     -p 443:443 \
-    -v "${cfg_dir}/data:/data" \
-    -v "${cfg_dir}/letsencrypt:/etc/letsencrypt" \
-    -v "${MEDIA_DIR}:${MEDIA_DIR}" \
-    "$active_image" &>> "$LOG_FILE"
+    -v ${cfg_dir}/data:/data \
+    -v ${cfg_dir}/letsencrypt:/etc/letsencrypt \
+    -v ${MEDIA_DIR}:${MEDIA_DIR} \
+    $active_image"
 
   state_set ".proxy_deployed" "true"
   success "Nginx Proxy Manager running on port 81 (admin UI)."
@@ -405,12 +429,10 @@ deploy_service() {
 
   local active_image="$image"
   if [[ -f "$custom_df" ]]; then
-    info "Prioritizing custom Dockerfile for ${name}..."
-    docker build -t "local-${name}:latest" -f "$custom_df" "$DOCKER_FILES_DIR" &>> "$LOG_FILE"
+    run_task "Building custom ${name} image" "docker build -t local-${name}:latest -f $custom_df $DOCKER_FILES_DIR"
     active_image="local-${name}:latest"
   else
-    info "Pulling generic image for ${name}..."
-    docker pull "$active_image" &>> "$LOG_FILE" || true
+    run_task "Pulling generic ${name} image" "docker pull $active_image"
   fi
 
   info "Starting ${name} container..."
@@ -455,7 +477,7 @@ deploy_service() {
 
   run_cmd+=("$active_image")
 
-  "${run_cmd[@]}" &>> "$LOG_FILE"
+  run_task "Launching container" "${run_cmd[*]}"
 
   state_set_service "$name" "$port" "running"
   success "${name} deployed on port ${port}.  Config: ${cfg_dir}"
@@ -525,7 +547,7 @@ cmd_down() {
   [[ -z "$target" ]] && return
 
   if confirm "Stop and remove '${target}'?"; then
-    docker rm -f "$target" &>> "$LOG_FILE" || true
+    run_task "Removing container ${target}" "docker rm -f $target"
     state_remove_service "$target"
     success "'${target}' removed."
   fi
@@ -656,17 +678,12 @@ cmd_purge() {
   echo
 
   if confirm "Are you ABSOLUTELY sure you want to PURGE EVERYTHING?"; then
-    info "Stopping and removing managed containers..."
-    docker rm -f nginx-proxy-manager &>> "$LOG_FILE" || true
-    for srv in "${!SERVICES[@]}"; do
-      docker rm -f "$srv" &>> "$LOG_FILE" || true
-    done
+    run_task "Stopping and removing managed containers" "docker rm -f nginx-proxy-manager $(echo ${!SERVICES[@]})" || true
 
-    info "Removing Docker network (${PROXY_NETWORK})..."
-    docker network rm "$PROXY_NETWORK" &>> "$LOG_FILE" || true
+    run_task "Removing Docker network (${PROXY_NETWORK})" "docker network rm $PROXY_NETWORK" || true
 
     if confirm "Delete ALL configurations? (Removes ${CONFIG_BASE})"; then
-      rm -rf "$CONFIG_BASE"
+      run_task "Deleting configuration directory" "rm -rf $CONFIG_BASE"
       success "Configuration directory removed."
     fi
 
@@ -695,12 +712,12 @@ cmd_clean() {
   separator
 
   if confirm "Remove unused images and stopped containers? (volumes are PRESERVED unless confirmed)"; then
-    docker image prune -af &>> "$LOG_FILE"
-    docker container prune -f &>> "$LOG_FILE"
+    run_task "Pruning Docker images" "docker image prune -af"
+    run_task "Pruning Docker containers" "docker container prune -f"
     success "Images and stopped containers pruned."
 
     if confirm "Also remove orphaned volumes? (WARNING: potential data loss)"; then
-      docker volume prune -f &>> "$LOG_FILE"
+      run_task "Pruning Docker volumes" "docker volume prune -f"
       success "Orphaned volumes removed."
     else
       warn "Volumes skipped — data is safe."
