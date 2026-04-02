@@ -1,0 +1,17 @@
+FROM lscr.io/linuxserver/jellyfin:latest
+
+# Environment variables as requested
+ENV PUID=1000
+ENV PGID=1000
+ENV TZ=Africa/Tunis
+
+# You can uncomment and set this if you want a specific published URL
+# ENV JELLYFIN_PublishedServerUrl=http://192.168.0.5
+
+# Expose Primary Web UI
+EXPOSE 8096
+
+# Expose Optional ports (Secure UI, Discovery, DLNA)
+EXPOSE 8920
+EXPOSE 7359/udp
+EXPOSE 1900/udp

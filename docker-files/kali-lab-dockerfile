@@ -1,0 +1,8 @@
+FROM kasmweb/kali-rolling-desktop:latest
+
+ENV KASM_USER=kali
+ENV VNC_PW=kali-secure
+# Allocate decent SHM memory for desktop environment
+ENV SHM_SIZE=2g
+
+EXPOSE 6901

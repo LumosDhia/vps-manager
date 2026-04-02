@@ -1,0 +1,23 @@
+# docker-files/nginx-proxy-manager/docker-compose.yml
+# Entry Gate — Reverse proxy + SSL via Let's Encrypt
+# Env vars injected by manager.sh:
+#   CONFIG_DIR  → ~/.config/personal-server/nginx-proxy-manager
+
+services:
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"        # Admin UI
+    volumes:
+      - ${CONFIG_DIR}/data:/data
+      - ${CONFIG_DIR}/letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy-nw
+
+networks:
+  proxy-nw:
+    external: true

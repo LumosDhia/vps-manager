@@ -1,0 +1,7 @@
+FROM lscr.io/linuxserver/prowlarr:latest
+
+ENV PUID=1000
+ENV PGID=1000
+ENV TZ=Africa/Tunis
+
+EXPOSE 9696

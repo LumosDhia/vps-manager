@@ -1,0 +1,8 @@
+FROM lscr.io/linuxserver/nextcloud:latest
+
+ENV PUID=1000
+ENV PGID=1000
+ENV TZ=Africa/Tunis
+
+# Standard linuxserver mapping
+EXPOSE 443

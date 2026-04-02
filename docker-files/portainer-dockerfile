@@ -1,0 +1,5 @@
+FROM portainer/portainer-ce:latest
+
+# Core Expose
+EXPOSE 9000
+EXPOSE 8000

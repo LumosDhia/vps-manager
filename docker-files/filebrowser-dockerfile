@@ -1,0 +1,8 @@
+FROM filebrowser/filebrowser:s6
+
+ENV PUID=1000
+ENV PGID=1000
+ENV TZ=Africa/Tunis
+
+# FileBrowser internal port
+EXPOSE 80

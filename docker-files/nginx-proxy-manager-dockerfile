@@ -1,0 +1,8 @@
+FROM jc21/nginx-proxy-manager:latest
+
+# Defaults
+ENV DB_SQLITE_FILE="/data/database.sqlite"
+
+EXPOSE 80
+EXPOSE 81
+EXPOSE 443

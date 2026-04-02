@@ -1,0 +1,7 @@
+FROM ghcr.io/homarr-labs/homarr:latest
+
+# Security Environment Variable
+ENV SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006
+
+# Primary Web UI
+EXPOSE 7575
