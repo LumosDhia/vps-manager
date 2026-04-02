@@ -80,7 +80,7 @@ confirm() {
 pause() {
   echo
   echo -e "  ${GREEN}${BOLD}Finished!${NC} ${TEXT}Task completed successfully.${NC}"
-  printf "  ${MAUVE}──${NC} ${BOLD}Press Enter to go back to main or 0 to close${NC}: "
+  printf "  ${MAUVE}──${NC} ${BOLD}Press [Enter] for Main Menu or [0] to Exit to Terminal${NC}: "
   read -r choice
   [[ "$choice" == "0" ]] && { echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"; exit 0; }
 }
@@ -773,13 +773,13 @@ fi
 
 # CLI mode or interactive menu
 case "${1:-}" in
-  up)     cmd_up      ;;
-  down)   cmd_down "${2:-}" ;;
-  status) cmd_status  ;;
-  doctor) cmd_doctor  ;;
-  clean)  cmd_clean   ;;
-  purge)  cmd_purge   ;;
-  init)   cmd_initialize ;;
+  up)     cmd_up;         main_menu ;;
+  down)   cmd_down "${2:-}"; main_menu ;;
+  status) cmd_status;     main_menu ;;
+  doctor) cmd_doctor;     main_menu ;;
+  clean)  cmd_clean;      main_menu ;;
+  purge)  cmd_purge;      main_menu ;;
+  init)   cmd_initialize; main_menu ;;
   --child|"") main_menu ;;
   *)
     echo -e "\n  ${BOLD}Usage:${NC} ./manager.sh [command]\n"
