@@ -493,6 +493,18 @@ deploy_service() {
   if [[ "$name" == "kali-lab" ]]; then
     warn "Kali Lab is RAM-intensive. Run './manager.sh down kali-lab' to free resources."
   fi
+
+  if [[ "$name" == "qbittorrent" ]]; then
+    info "Retrieving temporary admin password from logs..."
+    sleep 5 # Give qB time to generate password
+    local pass; pass=$(docker logs "$name" 2>&1 | grep -o 'The WebUI administrator password was at: .*' | awk -F': ' '{print $2}')
+    if [[ -n "$pass" ]]; then
+      success "qBittorrent Initial Admin Password: ${BOLD}${pass}${NC}"
+      warn "Username: admin | Change this immediately in the WebUI settings!"
+    else
+      warn "Password not found in logs yet. Check later: docker logs ${name}"
+    fi
+  fi
 }
 
 cmd_up() {
