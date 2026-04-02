@@ -341,6 +341,7 @@ SERVICES=(
   # Tier 3: Media
   [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp||"
   [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
+  [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080,TORRENTING_PORT=6881|6881:6881,6881:6881/udp|${MEDIA_DIR}/downloads:/downloads|"
 
   # Tier 4: Security Lab
   [kali-lab]="lscr.io/linuxserver/kali-linux:latest|3000|kali-lab|PIXELFLUX_WAYLAND=true,DRINODE=/dev/dri/renderD128,DRI_NODE=/dev/dri/renderD128,PUID=1000,PGID=1000,TZ=Africa/Tunis|||--gpus all --device /dev/dri/renderD128:/dev/dri/renderD128 --shm-size 2gb"
@@ -357,6 +358,7 @@ SERVICE_DESCRIPTIONS=(
   [nextcloud]="Tier 2 · Full personal cloud suite"
   [jellyfin]="Tier 3 · Media streaming server (Alpine)"
   [prowlarr]="Tier 3 · Indexer manager for media"
+  [qbittorrent]="Tier 3 · Lightweight BitTorrent client"
   [kali-lab]="Tier 4 · Security lab with browser VNC"
   [brave]="Tier 5 · GPU-accelerated Brave Browser"
 )
@@ -370,6 +372,7 @@ SERVICE_REQUIREMENTS=(
   [nextcloud]="512|2000"
   [jellyfin]="768|2000"
   [prowlarr]="256|500"
+  [qbittorrent]="512|1000"
   [kali-lab]="2048|5000"
   [brave]="1024|2000"
 )
