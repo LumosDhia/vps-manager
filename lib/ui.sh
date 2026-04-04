@@ -75,7 +75,10 @@ pause() {
   echo -e "  ${GREEN}${BOLD}Finished!${NC} ${TEXT}Task completed successfully.${NC}"
   printf "  ${MAUVE}──${NC} ${BOLD}Press [1] for Main Menu or [0] to Exit to Terminal${NC}: "
   read -r choice
-  [[ "$choice" == "0" ]] && { echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"; exit 0; }
+  if [[ "$choice" == "0" ]]; then
+    echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"
+    exit 0
+  fi
 }
 
 # ── Task Runner ───────────────────────────────────────────────────────────────
