@@ -15,7 +15,7 @@ declare -A SERVICES
 SERVICES=(
   # ── Tier 1: Management ────────────────────────────────────────────────────
   [homarr]="ghcr.io/homarr-labs/homarr:latest|7575|homarr|SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006||/var/run/docker.sock:/var/run/docker.sock|"
-  [portainer]="portainer/portainer-ce:latest|9000|portainer||8000:8000|/var/run/docker.sock:/var/run/docker.sock|"
+  [portainer]="portainer/portainer-ce:latest|9000|portainer|||/var/run/docker.sock:/var/run/docker.sock|"
 
   # ── Tier 2: Personal Cloud ────────────────────────────────────────────────
   [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|8080:80||"
