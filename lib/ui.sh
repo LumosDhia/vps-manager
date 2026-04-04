@@ -133,7 +133,7 @@ show_container_info() {
   # 2. Network Mapping
   echo
   printf "  ${BOLD}${LAVENDER}Port Mappings${NC}\n"
-  docker inspect "$name" --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}  › {{$p}} -> {{.HostPort}}{{println}}{{end}}{{end}}' | sed 's|^|  |' | head -n 10
+  docker inspect "$name" --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{$p}} -> {{.HostPort}}{{println}}{{end}}{{end}}' | grep "\->" | sort -u | sed 's|^|    › |' | head -n 10
   
   # 3. Last Logs (for passwords)
   echo

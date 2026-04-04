@@ -214,12 +214,33 @@ cmd_down() {
     show_header
     label "Remove a Service"
     echo
-    docker ps --format "  ${MAROON}›${NC} {{.Names}}  ${DIM}({{.Image}})${NC}" 2>/dev/null || true
+
+    local i=1
+    declare -a containers
+    # Get only managed containers (or all running ones)
+    while read -r name; do
+      containers+=("$name")
+      printf "  ${MAUVE}%2d)${NC} ${BOLD}%s${NC}\n" "$i" "$name"
+      (( i++ ))
+    done < <(docker ps --format '{{.Names}}')
+
+    if [[ ${#containers[@]} -eq 0 ]]; then
+      warn "No running containers found."
+      pause
+      return
+    fi
+
     echo
-    prompt "Container name to stop & remove" target
+    separator
+    prompt "Select service to remove (1-${#containers[@]}, or 0 to cancel)" pick
+    
+    [[ -z "$pick" || "$pick" == "0" ]] && { pause; return; }
+    
+    local idx=$(( pick - 1 ))
+    target="${containers[$idx]:-}"
   fi
 
-  [[ -z "$target" ]] && { pause; return; }
+  [[ -z "$target" ]] && { error "Invalid selection."; pause; return; }
 
   if confirm "Stop and remove '${target}'?"; then
     run_task "Removing container ${target}" "docker rm -f $target"
@@ -285,10 +306,20 @@ cmd_status() {
         
         # Get the primary port from our state file
         local port_state; port_state=$(state_get ".services.${name}.port")
+        
+        # Special case for Nginx Proxy Manager (which is a core infra component)
+        if [[ "$name" == "nginx-proxy-manager" ]]; then
+          port_state="81"
+        fi
+        
         [[ -z "$port_state" ]] && port_state="N/A"
         
+        # Clean status string: remove anything in parentheses (health checks) 
+        # and limit to the core "Up X time" part
+        local cleaner_status; cleaner_status=$(echo "$status" | sed 's/ (.*//' | cut -c1-12)
+        
         printf "  ${col}%-20s${NC} %-12s ${TEAL}%-8s${NC} ${DIM}%s${NC}\n" \
-          "$name" "$(echo "$status" | cut -c1-12)" ":${port_state}" "$image_short"
+          "$name" "$cleaner_status" ":${port_state}" "$image_short"
       done
 
   separator
@@ -312,6 +343,7 @@ cmd_status() {
 # ── System Doctor ─────────────────────────────────────────────────────────────
 
 cmd_doctor() {
+  set +e # Don't exit if checks fail
   show_header
   label "System Doctor  —  Security & Health Audit"
   echo
@@ -329,52 +361,50 @@ cmd_doctor() {
     || success "No containers are in a restart loop."
 
   # 3. High memory containers (>80% of system RAM)
-  local threshold=$(( $(free -m | awk '/^Mem:/{print $2}') * 80 / 100 ))
+  local total_mb; total_mb=$(free -m | awk '/^Mem:/{print $2}')
+  local threshold=$(( total_mb * 80 / 100 ))
+  
   docker stats --no-stream --format "{{.Name}} {{.MemUsage}}" 2>/dev/null \
   | while read -r cname mem_info; do
-      local mem_mb; mem_mb=$(echo "$mem_info" | grep -oP '^[\d.]+' | awk '{printf "%d", $1}')
-      (( mem_mb > threshold )) && warn "${cname} is using high memory: ${mem_info}"
+      local mem_mb; mem_mb=$(echo "$mem_info" | grep -oP '^[\d.]+' | awk '{printf "%d", $1}' 2>/dev/null)
+      if [[ -n "$mem_mb" ]] && (( mem_mb > threshold )); then
+        warn "${cname} is using high memory: ${mem_info}"
+      fi
     done
 
   # 4. UFW status
-  sudo ufw status | grep -q "Status: active" \
-    && success "UFW firewall is active." \
-    || warn "UFW firewall is NOT active."
+  if command -v ufw &>/dev/null; then
+    sudo ufw status | grep -q "Status: active" \
+      && success "UFW firewall is active." \
+      || warn "UFW firewall is NOT active."
+  else
+    warn "UFW firewall is not installed."
+  fi
 
   # 5. Fail2Ban
   if command -v fail2ban-client &>/dev/null && systemctl is-active --quiet fail2ban; then
     success "Fail2Ban is active."
   else
-    warn "Fail2Ban not detected. Consider installing it for brute-force protection."
-    if confirm "Install Fail2Ban now?"; then
-      sudo apt-get install -y fail2ban >> "$LOG_FILE"
-      sudo systemctl enable --now fail2ban >> "$LOG_FILE"
-      success "Fail2Ban installed and enabled."
-    fi
+    warn "Fail2Ban not detected or inactive."
   fi
 
   # 6. SSL cert expiry
   local cert_dir="/etc/letsencrypt/live"
   if [[ -d "$cert_dir" ]]; then
     for cert in "${cert_dir}"/*/fullchain.pem; do
-      local expiry days
-      expiry=$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)
-      days=$(( ( $(date -d "$expiry" +%s) - $(date +%s) ) / 86400 ))
-      (( days < 14 )) \
-        && warn "SSL cert expires in ${days} days: ${cert}" \
-        || success "SSL cert OK (${days} days left): $(basename "$(dirname "$cert")")"
+      if [[ -f "$cert" ]]; then
+        local expiry days
+        expiry=$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)
+        days=$(( ( $(date -d "$expiry" +%s) - $(date +%s) ) / 86400 ))
+        (( days < 14 )) \
+          && warn "SSL cert expires in ${days} days: ${cert}" \
+          || success "SSL cert OK (${days} days left): $(basename "$(dirname "$cert")")"
+      fi
     done
   fi
 
-  # 7. Optional lockdown
-  separator
-  if confirm "Lock down this account (remove sudo privileges)?"; then
-    warn "Removing ${USER} from sudo group..."
-    sudo deluser "$USER" sudo >> "$LOG_FILE"
-    warn "Sudo removed. Re-login required to take effect. Save root access elsewhere!"
-  fi
-
   show_footer
+  set -e # Restore normal behavior
   pause
 }
 
@@ -455,7 +485,7 @@ main_menu() {
     printf "  ${SAPPHIRE}5)${NC} ${BOLD}System Doctor${NC}            ${DIM}${SUBTEXT}Audit + security${NC}\n"
     printf "  ${YELLOW}6)${NC} ${BOLD}Prune & Clean${NC}            ${DIM}${SUBTEXT}Free up disk${NC}\n"
     printf "  ${MAROON}7)${NC} ${BOLD}Nuclear Purge${NC}            ${DIM}${SUBTEXT}Destroy & reset setup${NC}\n"
-    printf "  ${SKY}P)${NC} ${BOLD}Proxy Management${NC}         ${DIM}${SUBTEXT}Setup & config proxy (NPM)${NC}\n"
+    printf "  ${SKY}8)${NC} ${BOLD}Proxy Management${NC}         ${DIM}${SUBTEXT}Setup & config proxy (NPM)${NC}\n"
     printf "  ${RED}0)${NC} Exit\n"
     echo
     prompt "Select" CHOICE
@@ -468,7 +498,7 @@ main_menu() {
       5) cmd_doctor     ;;
       6) cmd_clean      ;;
       7) cmd_purge      ;;
-      [Pp]) cmd_proxy   ;;
+      8) cmd_proxy      ;;
       0) 
         echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"
         exit 0 
