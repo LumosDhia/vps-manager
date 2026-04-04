@@ -150,6 +150,11 @@ deploy_service() {
     for e in "${env_arr[@]}"; do run_cmd+=(-e "$e"); done
   fi
 
+  # ── Smart overrides for specific services ──────────────────────────────────────
+  if [[ "$name" == "qbittorrent" ]]; then
+    run_cmd+=(-e "WEBUI_PORT=${port}")
+  fi
+
   run_cmd+=("$active_image")
   run_task "Launching container" "${run_cmd[*]}"
 
