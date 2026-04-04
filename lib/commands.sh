@@ -74,8 +74,8 @@ cmd_up() {
   separator
   
   # Pre-flight: Validation & Input Collection
-  declare -a deploy_names
-  declare -A deploy_ports
+  local deploy_names=()
+  local -A deploy_ports=()
 
   for c in $choice; do
     local idx=$(( c - 1 ))
@@ -141,7 +141,7 @@ cmd_up() {
       [[ -z "$p" ]] && p="$default_port"
     fi
 
-    deploy_ports[$selected]="$p"
+    deploy_ports["$selected"]="$p"
     deploy_names+=("$selected")
   done
 

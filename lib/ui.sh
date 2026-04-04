@@ -136,13 +136,15 @@ show_container_info() {
   echo
   printf "  ${BOLD}${PEACH}Recent Logs (Last 20 lines)${NC}\n"
   echo -e "  ${DIM}────────────────────────────────────────────────────────────────────────${NC}"
-  docker logs --tail 20 "$name" 2>&1 | while read -r line; do
-    printf "  ${DIM}│${NC} %-70s\n" "${line:0:70}"
+  docker logs --tail 20 "$name" 2>&1 | while IFS= read -r line; do
+    printf "  ${DIM}│${NC} %s\n" "$line"
   done
   echo -e "  ${DIM}────────────────────────────────────────────────────────────────────────${NC}"
   
   echo
-  printf "  ${BOLD}Press [Enter] to return to action menu...${NC}"
-  read -r _
+  # Wait for Enter clearly, flushing buffer first 
+  # (in case they pressed ENTER during the menu selection)
+  while read -t 0.1 -n 1 -r; do :; done 
+  prompt "Press [Enter] to return" _
 }
 
