@@ -156,19 +156,7 @@ deploy_service() {
 
   # ── Post-deploy hooks ──────────────────────────────────────────────────────
   if [[ "$name" == "qbittorrent" ]]; then
-    info "Retrieving temporary admin password from logs..."
-    sleep 5
-    local pass
-    pass=$(docker logs "$name" 2>&1 | grep -o 'The WebUI administrator password was at: .*' | awk -F': ' '{print $2}' || true)
-    if [[ -n "$pass" ]]; then
-      success "qBittorrent Initial Admin Password: ${BOLD}${pass}${NC}"
-      warn "Username: admin | Change this immediately in the WebUI settings!"
-      
-      if [[ -v MULTI_DEPLOY_SUMMARY ]]; then
-        MULTI_DEPLOY_SUMMARY+=("      ${ARR} ${YELLOW}qBittorrent Admin Password: ${BOLD}${pass}${NC}")
-      fi
-    else
-      warn "Password not found in logs yet. Check later: docker logs ${name}"
-    fi
+    # We delay password fetching to give container time to start while other things deploy
+    export QBITTORRENT_CHECK_PASSWORD=true
   fi
 }
