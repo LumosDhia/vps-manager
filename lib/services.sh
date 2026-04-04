@@ -95,10 +95,16 @@ deploy_service() {
     fi
   fi
 
-  local port=$default_port
-  if ! is_port_free "$port"; then
-    warn "Port ${port} is in use."
-    prompt "Enter an alternative port for ${name}" port
+  # ── Port selection ──────────────────────────────────────────────────────────
+  local port
+  if ! is_port_free "$default_port"; then
+    error "Default port ${default_port} is already in use."
+    prompt "Enter a custom port for ${name}" port
+    [[ -z "$port" ]] && { warn "No port provided. Aborting."; return 1; }
+  else
+    printf "  ${MAUVE}?${NC} ${BOLD}Port for ${name}${NC} [${DIM}default: ${default_port}${NC}]: "
+    read -r port
+    [[ -z "$port" ]] && port="$default_port"
   fi
 
   mkdir -p "$cfg_dir"
