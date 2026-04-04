@@ -57,17 +57,38 @@ cmd_up() {
 
   echo
   separator
-  prompt "Select service number (or 0 to cancel)" choice
+  prompt "Select service numbers (e.g., '1 4 5', or 0 to cancel)" choice
 
   if [[ "$choice" == "0" || -z "$choice" ]]; then pause; return; fi
 
-  local idx=$(( choice - 1 ))
-  local selected="${menu_keys[$idx]:-}"
-  [[ -n "$selected" ]] || { error "Invalid selection."; pause; return; }
+  # Initialize summary array
+  export MULTI_DEPLOY_SUMMARY=()
 
-  separator
-  info "Deploying: ${selected}"
-  deploy_service "$selected"
+  # Iterate over all selected numbers
+  for c in $choice; do
+    local idx=$(( c - 1 ))
+    local selected="${menu_keys[$idx]:-}"
+    if [[ -z "$selected" ]]; then
+      error "Invalid selection: $c. Skipping."
+      continue
+    fi
+
+    separator
+    info "Deploying: ${selected}"
+    deploy_service "$selected"
+  done
+
+  # Print Summary if any deployments took place
+  if [[ ${#MULTI_DEPLOY_SUMMARY[@]} -gt 0 ]]; then
+    separator
+    label "Deployment Summary"
+    echo
+    for line in "${MULTI_DEPLOY_SUMMARY[@]}"; do
+      echo -e "$line"
+    done
+    echo
+  fi
+  
   pause
 }
 

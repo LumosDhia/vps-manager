@@ -149,6 +149,10 @@ deploy_service() {
 
   state_set_service "$name" "$port" "running"
   success "${name} deployed on port ${port}.  Config: ${cfg_dir}"
+  
+  if [[ -v MULTI_DEPLOY_SUMMARY ]]; then
+    MULTI_DEPLOY_SUMMARY+=("  ${GREEN}${OK}${NC} ${BOLD}${name}${NC} deployed on port ${TEAL}:${port}${NC}")
+  fi
 
   # ── Post-deploy hooks ──────────────────────────────────────────────────────
   if [[ "$name" == "qbittorrent" ]]; then
@@ -158,6 +162,10 @@ deploy_service() {
     if [[ -n "$pass" ]]; then
       success "qBittorrent Initial Admin Password: ${BOLD}${pass}${NC}"
       warn "Username: admin | Change this immediately in the WebUI settings!"
+      
+      if [[ -v MULTI_DEPLOY_SUMMARY ]]; then
+        MULTI_DEPLOY_SUMMARY+=("      ${ARR} ${YELLOW}qBittorrent Admin Password: ${BOLD}${pass}${NC}")
+      fi
     else
       warn "Password not found in logs yet. Check later: docker logs ${name}"
     fi
