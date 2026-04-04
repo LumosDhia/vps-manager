@@ -53,6 +53,7 @@ handle_user() {
     chmod +x "$target_script"
 
     # Copy the lib/ directory so sourced modules are available after the switch
+    rm -rf "/home/${TARGET_USER}/lib"
     cp -r "${SCRIPT_DIR}/lib" "/home/${TARGET_USER}/lib"
     chown -R "${TARGET_USER}:${TARGET_USER}" "$target_script" "/home/${TARGET_USER}/lib"
 
