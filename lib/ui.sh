@@ -151,3 +151,20 @@ show_container_info() {
   prompt "Press [Enter] to return" _
 }
 
+# ── Resource Management ───────────────────────────────────────────────────────
+
+check_resources() {
+  local req_ram=$1 req_disk=$2
+  
+  # free -m gives RAM in Megabytes
+  local free_ram; free_ram=$(free -m | awk '/^Mem:/{print $7}')
+  # df -m gives Disk in Megabytes
+  local free_disk; free_disk=$(df -m / | awk 'NR==2{print $4}')
+  
+  # Basic logic: 0 is success, 1 is failure
+  [[ $free_ram -lt $req_ram ]] && return 1
+  [[ $free_disk -lt $req_disk ]] && return 1
+  
+  return 0
+}
+
