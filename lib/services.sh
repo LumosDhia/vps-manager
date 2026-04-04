@@ -31,11 +31,8 @@ SERVICES=(
 
 # ── Ordered Service List (for menu) ───────────────────────────────────────────
 ORDERED_SERVICES=(
-  "LABEL:Tier 1: Management"
   "homarr" "portainer"
-  "LABEL:Tier 2: Personal Cloud"
   "filebrowser" "nextcloud"
-  "LABEL:Tier 3: Media & Entertainment"
   "jellyfin" "navidrome" "kavita" "qbittorrent" "prowlarr"
 )
 

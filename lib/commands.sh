@@ -38,11 +38,6 @@ cmd_up() {
   declare -a menu_keys
 
   for key in "${ORDERED_SERVICES[@]}"; do
-    if [[ "$key" == LABEL:* ]]; then
-      echo -e "\n  ${BOLD}${BLUE}${key#LABEL:}${NC}"
-      continue
-    fi
-
     menu_keys+=("$key")
     local desc="${SERVICE_DESCRIPTIONS[$key]:-}"
     local reqs="${SERVICE_REQUIREMENTS[$key]:-256|1000}"
