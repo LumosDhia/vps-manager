@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# ==============================================================================
+#  lib/services.sh  —  Service Catalog & Deployment Engine
+#  Add new services here. Format: image|port|dir|env|extra_ports|extra_volumes|extra_args
+# ==============================================================================
+
+# ── Service Catalog ───────────────────────────────────────────────────────────
+# Fields: image | default_port | config_dir | extra_env | extra_ports | extra_volumes | extra_args
+# extra_env:     comma-separated KEY=VALUE pairs
+# extra_ports:   comma-separated HOST:CONTAINER pairs
+# extra_volumes: comma-separated HOST:CONTAINER pairs (use CFG_DIR as placeholder)
+# extra_args:    raw docker run flags (e.g. --gpus all)
+
+declare -A SERVICES
+SERVICES=(
+  # ── Tier 1: Management ────────────────────────────────────────────────────
+  [homarr]="ghcr.io/homarr-labs/homarr:latest|7575|homarr|SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006||/var/run/docker.sock:/var/run/docker.sock|"
+  [portainer]="portainer/portainer-ce:latest|9000|portainer||8000:8000|/var/run/docker.sock:/var/run/docker.sock|"
+
+  # ── Tier 2: Personal Cloud ────────────────────────────────────────────────
+  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|8080:80||"
+  [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|8090:443||"
+
+  # ── Tier 3: Media ─────────────────────────────────────────────────────────
+  [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp||"
+  [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
+  [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080,TORRENTING_PORT=6881|6881:6881,6881:6881/udp|${MEDIA_DIR}/downloads:/downloads|"
+  [navidrome]="lscr.io/linuxserver/navidrome:latest|4533|navidrome|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}/music:/music|"
+)
+
+declare -A SERVICE_DESCRIPTIONS
+SERVICE_DESCRIPTIONS=(
+  [homarr]="Tier 1 · Lightweight home dashboard"
+  [portainer]="Tier 1 · Docker container visualizer"
+  [filebrowser]="Tier 2 · Personal cloud file manager"
+  [nextcloud]="Tier 2 · Full personal cloud suite"
+  [jellyfin]="Tier 3 · Media streaming server"
+  [prowlarr]="Tier 3 · Indexer manager for media"
+  [qbittorrent]="Tier 3 · Lightweight BitTorrent client"
+  [navidrome]="Tier 3 · Modern music server"
+)
+
+# RAM (MB) | Disk (MB)
+declare -A SERVICE_REQUIREMENTS
+SERVICE_REQUIREMENTS=(
+  [homarr]="150|500"
+  [portainer]="100|500"
+  [filebrowser]="50|200"
+  [nextcloud]="512|2000"
+  [jellyfin]="768|2000"
+  [prowlarr]="256|500"
+  [qbittorrent]="512|1000"
+  [navidrome]="256|500"
+)
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+check_resources() {
+  local required_ram=$1 required_disk=$2
+  local free_ram; free_ram=$(free -m | awk '/^Mem:/{print $7}')
+  local free_disk; free_disk=$(df -m / | awk 'NR==2{print $4}')
+  local ok=true
+
+  (( free_ram < required_ram ))  && { error "Insufficient RAM! Required: ${required_ram}MB, Available: ${free_ram}MB";   ok=false; }
+  (( free_disk < required_disk )) && { error "Insufficient Disk! Required: ${required_disk}MB, Available: ${free_disk}MB"; ok=false; }
+
+  [[ "$ok" == true ]] || return 1
+}
+
+is_port_free() {
+  ! ss -tlnp | grep -q ":${1} "
+}
+
+# ── Deployment Engine ─────────────────────────────────────────────────────────
+
+deploy_service() {
+  local name=$1
+  local def="${SERVICES[$name]}"
+  IFS='|' read -r image default_port _unused extra_env extra_ports extra_volumes extra_args <<< "$def"
+
+  local cfg_dir="${CONFIG_BASE}/${name}"
+  local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
+  local reqs="${SERVICE_REQUIREMENTS[$name]:-256|1000}"
+
+  if ! check_resources "${reqs%%|*}" "${reqs##*|}"; then
+    warn "Deployment aborted due to lack of VPS resources."
+    return 1
+  fi
+
+  if [[ "$(state_get ".services.${name}.status")" == "running" ]]; then
+    if confirm "'${name}' is already deployed. Redeploy?"; then
+      docker rm -f "$name" &>> "$LOG_FILE" || true
+    else
+      return
+    fi
+  fi
+
+  local port=$default_port
+  if ! is_port_free "$port"; then
+    warn "Port ${port} is in use."
+    prompt "Enter an alternative port for ${name}" port
+  fi
+
+  mkdir -p "$cfg_dir"
+
+  local active_image="$image"
+  if [[ -f "$custom_df" ]]; then
+    run_task "Building custom ${name} image" "docker build -t local-${name}:latest -f $custom_df $DOCKER_FILES_DIR"
+    active_image="local-${name}:latest"
+  else
+    run_task "Pulling ${name} image" "docker pull $active_image"
+  fi
+
+  info "Starting ${name} container..."
+  local run_cmd=(docker run -d --name "$name" --restart unless-stopped)
+  run_cmd+=(--network "$PROXY_NETWORK")
+  run_cmd+=(-p "${port}:${default_port}")
+
+  [[ -n "$extra_args" ]] && { read -ra args_arr <<< "$extra_args"; run_cmd+=("${args_arr[@]}"); }
+
+  if [[ -n "$extra_ports" ]]; then
+    IFS=',' read -ra port_arr <<< "$extra_ports"
+    for ep in "${port_arr[@]}"; do run_cmd+=(-p "$ep"); done
+  fi
+
+  run_cmd+=(-v "${cfg_dir}:/config")
+  run_cmd+=(-v "${MEDIA_DIR}:${MEDIA_DIR}")
+
+  if [[ -n "$extra_volumes" ]]; then
+    IFS=',' read -ra vol_arr <<< "$extra_volumes"
+    for ev in "${vol_arr[@]}"; do
+      run_cmd+=(-v "${ev//CFG_DIR/$cfg_dir}")
+    done
+  fi
+
+  if [[ -n "$extra_env" ]]; then
+    IFS=',' read -ra env_arr <<< "$extra_env"
+    for e in "${env_arr[@]}"; do run_cmd+=(-e "$e"); done
+  fi
+
+  run_cmd+=("$active_image")
+  run_task "Launching container" "${run_cmd[*]}"
+
+  state_set_service "$name" "$port" "running"
+  success "${name} deployed on port ${port}.  Config: ${cfg_dir}"
+
+  # ── Post-deploy hooks ──────────────────────────────────────────────────────
+  if [[ "$name" == "qbittorrent" ]]; then
+    info "Retrieving temporary admin password from logs..."
+    sleep 5
+    local pass; pass=$(docker logs "$name" 2>&1 | grep -o 'The WebUI administrator password was at: .*' | awk -F': ' '{print $2}')
+    if [[ -n "$pass" ]]; then
+      success "qBittorrent Initial Admin Password: ${BOLD}${pass}${NC}"
+      warn "Username: admin | Change this immediately in the WebUI settings!"
+    else
+      warn "Password not found in logs yet. Check later: docker logs ${name}"
+    fi
+  fi
+}
