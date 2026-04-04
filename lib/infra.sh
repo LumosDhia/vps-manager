@@ -174,5 +174,5 @@ deploy_reverse_proxy() {
 
   state_set ".proxy_deployed" "true"
   success "Nginx Proxy Manager running on port 81 (admin UI)."
-  warn "Default login: admin@example.com / changeme  — change it immediately!"
+  info "Visit :81 to complete setup and create your admin account."
 }
