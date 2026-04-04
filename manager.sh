@@ -39,16 +39,18 @@ if [[ "${1:-}" != "--child" ]]; then
 fi
 
 # ── CLI Dispatch ──────────────────────────────────────────────────────────────
+[[ "${1:-}" == "--child" ]] && shift
+
 case "${1:-}" in
-  init)   cmd_initialize; main_menu ;;
-  up)     cmd_up;         main_menu ;;
-  down)   cmd_down "${2:-}"; main_menu ;;
-  status) cmd_status;     main_menu ;;
-  doctor) cmd_doctor;     main_menu ;;
-  clean)  cmd_clean;      main_menu ;;
-  purge)  cmd_purge;      main_menu ;;
-  proxy)  cmd_proxy;      main_menu ;;
-  --child|"") main_menu ;;
+  init)   cmd_initialize ;;
+  up)     cmd_up         ;;
+  down)   cmd_down "${2:-}" ;;
+  status) cmd_status     ;;
+  doctor) cmd_doctor     ;;
+  clean)  cmd_clean      ;;
+  purge)  cmd_purge      ;;
+  proxy)  cmd_proxy      ;;
+  "")     main_menu      ;;
   *)
     echo -e "\n  ${BOLD}Usage:${NC} ./manager.sh [command]\n"
     echo -e "  Commands: init | up | down <name> | status | doctor | clean | purge | proxy"
@@ -56,3 +58,6 @@ case "${1:-}" in
     exit 1
     ;;
 esac
+
+# Return to interactive menu
+main_menu

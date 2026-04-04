@@ -57,7 +57,7 @@ handle_user() {
     chown -R "${TARGET_USER}:${TARGET_USER}" "$target_script" "/home/${TARGET_USER}/lib"
 
     info "Transitioning session to '${TARGET_USER}'..."
-    exec sudo -u "$TARGET_USER" -H bash "$target_script" "${@:1}"
+    exec sudo -u "$TARGET_USER" -H bash "$target_script" --child "$@"
   fi
 }
 

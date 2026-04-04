@@ -302,7 +302,8 @@ cmd_purge() {
 # ── Main Menu ─────────────────────────────────────────────────────────────────
 
 main_menu() {
-  while true; do
+  local IN_LOOP=true
+  while "$IN_LOOP"; do
     show_header
     label "Main Menu"
     echo
@@ -327,8 +328,14 @@ main_menu() {
       6) cmd_clean      ;;
       7) cmd_purge      ;;
       [Pp]) cmd_proxy   ;;
-      0) echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"; exit 0 ;;
-      *) error "Invalid option."; sleep 1 ;;
+      0) 
+        echo -e "\n  ${SUBTEXT}Goodbye.${NC}\n"
+        exit 0 
+        ;;
+      *) 
+        error "Invalid option."
+        sleep 1 
+        ;;
     esac
   done
 }
