@@ -37,7 +37,12 @@ cmd_up() {
   local i=1
   declare -a menu_keys
 
-  for key in "${!SERVICES[@]}"; do
+  for key in "${ORDERED_SERVICES[@]}"; do
+    if [[ "$key" == LABEL:* ]]; then
+      echo -e "\n  ${BOLD}${BLUE}${key#LABEL:}${NC}"
+      continue
+    fi
+
     menu_keys+=("$key")
     local desc="${SERVICE_DESCRIPTIONS[$key]:-}"
     local reqs="${SERVICE_REQUIREMENTS[$key]:-256|1000}"
@@ -45,8 +50,7 @@ cmd_up() {
     local tag="" tag_color=$NC
 
     # Resolve dynamic docker status
-    local docker_status
-    docker_status=$(docker inspect -f '{{.State.Status}}' "$key" 2>/dev/null || echo "none")
+    local docker_status; docker_status=$(docker inspect -f '{{.State.Status}}' "$key" 2>/dev/null || echo "none")
 
     case "$docker_status" in
       running)    tag="[RUNNING]";  tag_color=$GREEN ;;

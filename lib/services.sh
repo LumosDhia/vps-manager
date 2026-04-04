@@ -29,6 +29,16 @@ SERVICES=(
   [kavita]="kavitareader/kavita:latest|5000|kavita|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}:/media|"
 )
 
+# ── Ordered Service List (for menu) ───────────────────────────────────────────
+ORDERED_SERVICES=(
+  "LABEL:Tier 1: Management"
+  "homarr" "portainer"
+  "LABEL:Tier 2: Personal Cloud"
+  "filebrowser" "nextcloud"
+  "LABEL:Tier 3: Media & Entertainment"
+  "jellyfin" "navidrome" "kavita" "qbittorrent" "prowlarr"
+)
+
 declare -A SERVICE_DESCRIPTIONS
 SERVICE_DESCRIPTIONS=(
   [homarr]="Tier 1 · Lightweight home dashboard"
@@ -36,93 +46,40 @@ SERVICE_DESCRIPTIONS=(
   [filebrowser]="Tier 2 · Personal cloud file manager"
   [nextcloud]="Tier 2 · Full personal cloud suite"
   [jellyfin]="Tier 3 · Media streaming server"
-  [prowlarr]="Tier 3 · Indexer manager for media"
-  [qbittorrent]="Tier 3 · Lightweight BitTorrent client"
   [navidrome]="Tier 3 · Modern music server"
+  [qbittorrent]="Tier 3 · Lightweight BitTorrent client"
+  [prowlarr]="Tier 3 · Indexer manager for media"
+  [kavita]="Tier 3 · Ultimate Ebook & Manga reader"
 )
 
-# RAM (MB) | Disk (MB)
 declare -A SERVICE_REQUIREMENTS
 SERVICE_REQUIREMENTS=(
-  [homarr]="150|500"
-  [portainer]="100|500"
-  [filebrowser]="50|200"
+  [homarr]="128|500"
+  [portainer]="128|500"
+  [filebrowser]="128|1000"
   [nextcloud]="512|2000"
-  [jellyfin]="768|2000"
-  [prowlarr]="256|500"
-  [qbittorrent]="512|1000"
-  [navidrome]="256|500"
+  [jellyfin]="1024|4000"
+  [navidrome]="256|1000"
+  [qbittorrent]="256|2000"
+  [prowlarr]="256|1000"
+  [kavita]="512|2000"
 )
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-check_resources() {
-  local required_ram=$1 required_disk=$2
-  local free_ram; free_ram=$(free -m | awk '/^Mem:/{print $7}')
-  local free_disk; free_disk=$(df -m / | awk 'NR==2{print $4}')
-  local ok=true
-
-  (( free_ram < required_ram ))  && { error "Insufficient RAM! Required: ${required_ram}MB, Available: ${free_ram}MB";   ok=false; }
-  (( free_disk < required_disk )) && { error "Insufficient Disk! Required: ${required_disk}MB, Available: ${free_disk}MB"; ok=false; }
-
-  [[ "$ok" == true ]] || return 1
-}
-
-is_port_free() {
-  ! ss -tlnp | grep -q ":${1} "
-}
-
-# ── Deployment Engine ─────────────────────────────────────────────────────────
+# ── Deployment Logic ──────────────────────────────────────────────────────────
 
 deploy_service() {
-  local name=$1
-  local provided_port=${2:-}
+  local name=$1 port=$2
   local def="${SERVICES[$name]}"
-  IFS='|' read -r image default_port _unused extra_env extra_ports extra_volumes extra_args <<< "$def"
+  [[ -z "$def" ]] && die "Service ${name} not defined in catalog."
+
+  IFS='|' read -r image default_port _dir extra_env extra_ports extra_volumes extra_args <<< "$def"
 
   local cfg_dir="${CONFIG_BASE}/${name}"
-  local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
-  local port
-
-  if [[ -n "$provided_port" ]]; then
-    port="$provided_port"
-  else
-    # Fallback to interactive logic for manual single calls
-    local reqs="${SERVICE_REQUIREMENTS[$name]:-256|1000}"
-    if ! check_resources "${reqs%%|*}" "${reqs##*|}"; then
-      warn "Deployment aborted due to lack of VPS resources."
-      return 1
-    fi
-
-    if docker container inspect "$name" &>/dev/null; then
-      if confirm "'${name}' container already exists. Rebuild it?"; then
-        docker rm -f "$name" &>> "$LOG_FILE" || true
-      else
-        return
-      fi
-    fi
-
-    if ! is_port_free "$default_port"; then
-      error "Default port ${default_port} is already in use."
-      prompt "Enter a custom port for ${name}" port
-      [[ -z "$port" ]] && { warn "No port provided. Aborting."; return 1; }
-    else
-      printf "  ${MAUVE}?${NC} ${BOLD}Port for ${name}${NC} [${DIM}default: ${default_port}${NC}]: "
-      read -r port
-      [[ -z "$port" ]] && port="$default_port"
-    fi
-  fi
-
   mkdir -p "$cfg_dir"
 
+  # Pre-flight: Pull image
+  run_task "Verifying ${name} image" "docker pull ${image}"
   local active_image="$image"
-  if [[ -f "$custom_df" ]]; then
-    run_task "Building custom ${name} image" "docker build -t local-${name}:latest -f $custom_df $DOCKER_FILES_DIR"
-    active_image="local-${name}:latest"
-  else
-    # If pulled in parallel, this completes instantly
-    run_task "Verifying ${name} image" "docker pull $active_image"
-  fi
 
   info "Starting ${name} container..."
   local run_cmd=(docker run -d --name "$name" --restart unless-stopped)
