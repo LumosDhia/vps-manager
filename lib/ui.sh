@@ -111,6 +111,9 @@ run_task() {
 # ── Info Viewer ───────────────────────────────────────────────────────────────
 show_container_info() {
   local name=$1
+  # Flush stdin to ignore any Enter key from the selection menu 
+  while read -t 0.1 -r -n 100; do :; done
+  
   show_header
   label "Detailed Container Diagnostics: ${name}"
   echo

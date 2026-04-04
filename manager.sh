@@ -11,7 +11,7 @@
 #    lib/services.sh — Service catalog & deployment engine
 #    lib/commands.sh — Interactive menu commands
 # ==============================================================================
-set -euo pipefail
+set -eo pipefail
 
 # ── Globals ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
