@@ -50,8 +50,11 @@ handle_user() {
 
     local target_script="/home/${TARGET_USER}/manager.sh"
     cp "$0" "$target_script"
-    chown "${TARGET_USER}:${TARGET_USER}" "$target_script"
     chmod +x "$target_script"
+
+    # Copy the lib/ directory so sourced modules are available after the switch
+    cp -r "${SCRIPT_DIR}/lib" "/home/${TARGET_USER}/lib"
+    chown -R "${TARGET_USER}:${TARGET_USER}" "$target_script" "/home/${TARGET_USER}/lib"
 
     info "Transitioning session to '${TARGET_USER}'..."
     exec sudo -u "$TARGET_USER" -H bash "$target_script" "${@:1}"
