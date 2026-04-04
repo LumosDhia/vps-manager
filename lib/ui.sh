@@ -111,25 +111,38 @@ run_task() {
 # ── Info Viewer ───────────────────────────────────────────────────────────────
 show_container_info() {
   local name=$1
-  separator
-  printf "  ${BOLD}${BLUE}Container Info: ${name}${NC}\n"
+  show_header
+  label "Detailed Container Diagnostics: ${name}"
+  echo
 
-  # Extract via docker inspect
-  local image; image=$(docker inspect -f '{{.Config.Image}}' "$name" 2>/dev/null)
+  # 1. Inspect Stats
+  local image;  image=$(docker inspect -f '{{.Config.Image}}' "$name" 2>/dev/null)
   local status; status=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)
-  local created; created=$(docker inspect -f '{{.Created}}' "$name" 2>/dev/null | cut -d. -f1)
-  local ip; ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name" 2>/dev/null)
+  local ip;     ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name" 2>/dev/null)
+  local uptime; uptime=$(docker inspect -f '{{.State.StartedAt}}' "$name" 2>/dev/null | cut -d. -f1 | sed 's/T/ /')
 
+  printf "  ${BOLD}${BLUE}Container Details${NC}\n"
   printf "  ${DIM}%-14s${NC} %s\n" "Image:" "${image}"
   printf "  ${DIM}%-14s${NC} %s\n" "Status:" "${status}"
-  printf "  ${DIM}%-14s${NC} %s\n" "Created:" "${created}"
   printf "  ${DIM}%-14s${NC} %s\n" "IP Address:" "${ip:-N/A}"
-
-  printf "\n  ${BOLD}${LAVENDER}Exposed Ports:${NC}\n"
+  printf "  ${DIM}%-14s${NC} %s\n" "Started At:" "${uptime}"
+  
+  # 2. Network Mapping
+  echo
+  printf "  ${BOLD}${LAVENDER}Port Mappings${NC}\n"
   docker inspect "$name" --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}  › {{$p}} -> {{.HostPort}}{{println}}{{end}}{{end}}' | sed 's|^|  |' | head -n 10
-
-  printf "\n  ${BOLD}${LAVENDER}Storage Mounts:${NC}\n"
-  docker inspect "$name" --format '{{range .Mounts}}  › {{.Source}} -> {{.Destination}}{{println}}{{end}}' | sed 's|^|  |' | head -n 10
-  separator
+  
+  # 3. Last Logs (for passwords)
+  echo
+  printf "  ${BOLD}${PEACH}Recent Logs (Last 20 lines)${NC}\n"
+  echo -e "  ${DIM}────────────────────────────────────────────────────────────────────────${NC}"
+  docker logs --tail 20 "$name" 2>&1 | while read -r line; do
+    printf "  ${DIM}│${NC} %-70s\n" "${line:0:70}"
+  done
+  echo -e "  ${DIM}────────────────────────────────────────────────────────────────────────${NC}"
+  
+  echo
+  printf "  ${BOLD}Press [Enter] to return to action menu...${NC}"
+  read -r _
 }
 

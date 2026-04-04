@@ -18,13 +18,13 @@ SERVICES=(
   [portainer]="portainer/portainer-ce:latest|9000|portainer|||/var/run/docker.sock:/var/run/docker.sock|"
 
   # ── Tier 2: Personal Cloud ────────────────────────────────────────────────
-  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|8080:80||"
+  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
   [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|8090:443||"
 
   # ── Tier 3: Media ─────────────────────────────────────────────────────────
-  [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp||"
+  [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
   [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
-  [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080,TORRENTING_PORT=6881|6881:6881,6881:6881/udp|${MEDIA_DIR}/downloads:/downloads|"
+  [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080||${MEDIA_DIR}/downloads:/downloads|"
   [navidrome]="deluan/navidrome:latest|4533|navidrome|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}/music:/music|"
 )
 
