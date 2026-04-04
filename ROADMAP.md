@@ -36,9 +36,6 @@ This roadmap outlines the development of a lightweight, interactive management s
 - **Tier 1: Management**: Homarr (Dashboard), Portainer (Visualizer).
 - **Tier 2: Personal Cloud**: FileBrowser, Nextcloud (Lightweight version).
 - **Tier 3: Media**: Jellyfin (Alpine), Prowlarr.
-- **Tier 4: Security Lab**: 
-  - Customized Kali Linux container with web-based VNC access.
-  - Logic to toggle the lab "On/Off" to save RAM.
 
 ## Phase 5: Maintenance, Monitoring & Guardrails
 - **Health Checks**: A "Doctor" command to scan for container restarts, high RAM usage, or expiring SSL certificates.

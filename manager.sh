@@ -342,12 +342,8 @@ SERVICES=(
   [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp||"
   [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
   [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080,TORRENTING_PORT=6881|6881:6881,6881:6881/udp|${MEDIA_DIR}/downloads:/downloads|"
+  [navidrome]="lscr.io/linuxserver/navidrome:latest|4533|navidrome|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}/music:/music|"
 
-  # Tier 4: Security Lab
-  [kali-lab]="lscr.io/linuxserver/kali-linux:latest|3000|kali-lab|PIXELFLUX_WAYLAND=true,DRINODE=/dev/dri/renderD128,DRI_NODE=/dev/dri/renderD128,PUID=1000,PGID=1000,TZ=Africa/Tunis|||--gpus all --device /dev/dri/renderD128:/dev/dri/renderD128 --shm-size 2gb"
-
-  # Tier 5: GPU Accelerated Cloud
-  [brave]="lscr.io/linuxserver/brave:latest|3000|brave|PIXELFLUX_WAYLAND=true,DRINODE=/dev/dri/renderD128,DRI_NODE=/dev/dri/renderD128,PUID=1000,PGID=1000,TZ=Africa/Tunis|||--gpus all --device /dev/dri/renderD128:/dev/dri/renderD128 --shm-size 2gb"
 )
 
 declare -A SERVICE_DESCRIPTIONS
@@ -359,8 +355,7 @@ SERVICE_DESCRIPTIONS=(
   [jellyfin]="Tier 3 · Media streaming server (Alpine)"
   [prowlarr]="Tier 3 · Indexer manager for media"
   [qbittorrent]="Tier 3 · Lightweight BitTorrent client"
-  [kali-lab]="Tier 4 · Security lab with browser VNC"
-  [brave]="Tier 5 · GPU-accelerated Brave Browser"
+  [navidrome]="Tier 3 · Modern Music Server"
 )
 
 # Service requirements: RAM (MB) | Disk (MB)
@@ -373,8 +368,7 @@ SERVICE_REQUIREMENTS=(
   [jellyfin]="768|2000"
   [prowlarr]="256|500"
   [qbittorrent]="512|1000"
-  [kali-lab]="2048|5000"
-  [brave]="1024|2000"
+  [navidrome]="256|500"
 )
 
 check_resources() {
@@ -489,10 +483,6 @@ deploy_service() {
 
   state_set_service "$name" "$port" "running"
   success "${name} deployed on port ${port}.  Config: ${cfg_dir}"
-
-  if [[ "$name" == "kali-lab" ]]; then
-    warn "Kali Lab is RAM-intensive. Run './manager.sh down kali-lab' to free resources."
-  fi
 
   if [[ "$name" == "qbittorrent" ]]; then
     info "Retrieving temporary admin password from logs..."
