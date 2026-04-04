@@ -18,7 +18,7 @@ SERVICES=(
   [portainer]="portainer/portainer-ce:latest|9000|portainer|||/var/run/docker.sock:/var/run/docker.sock|"
 
   # ── Tier 2: Personal Cloud ────────────────────────────────────────────────
-  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|:80||"
+  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|:80|${MEDIA_DIR}:/srv|"
   [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|:443||"
 
   # ── Tier 3: Media ─────────────────────────────────────────────────────────
@@ -140,6 +140,11 @@ deploy_service() {
   if [[ -n "$extra_ports" ]]; then
     IFS=',' read -ra port_arr <<< "$extra_ports"
     for ep in "${port_arr[@]}"; do run_cmd+=(-p "$ep"); done
+  fi
+
+  # Firewall safety: Ensure the host port is open to the internet
+  if command -v ufw &>/dev/null; then
+    sudo ufw allow "$port"/tcp &>> "$LOG_FILE" || true
   fi
 
   run_cmd+=(-v "${cfg_dir}:/config")
