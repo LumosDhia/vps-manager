@@ -168,3 +168,11 @@ check_resources() {
   return 0
 }
 
+# ── Port Management ───────────────────────────────────────────────────────────
+
+is_port_free() {
+  local port=$1
+  # Returns 0 (true) if grep finds nothing (port is free)
+  ! ss -tuln | grep -q ":${port} "
+}
+
