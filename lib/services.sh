@@ -18,8 +18,8 @@ SERVICES=(
   [portainer]="portainer/portainer-ce:latest|9000|portainer|||/var/run/docker.sock:/var/run/docker.sock|"
 
   # ── Tier 2: Personal Cloud ────────────────────────────────────────────────
-  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
-  [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|8090:443||"
+  [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|:80||"
+  [nextcloud]="lscr.io/linuxserver/nextcloud:latest|8090|nextcloud|PUID=1000,PGID=1000,TZ=Africa/Tunis|:443||"
 
   # ── Tier 3: Media ─────────────────────────────────────────────────────────
   [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
@@ -126,7 +126,14 @@ deploy_service() {
   info "Starting ${name} container..."
   local run_cmd=(docker run -d --name "$name" --restart unless-stopped)
   run_cmd+=(--network "$PROXY_NETWORK")
-  run_cmd+=(-p "${port}:${default_port}")
+  
+  # Smart port mapping for containers with mismatched internal ports
+  local internal_port="$default_port"
+  if [[ "$extra_ports" == :* ]]; then
+    internal_port="${extra_ports#:}"
+    extra_ports="" # Clear it so it's not mapped twice
+  fi
+  run_cmd+=(-p "${port}:${internal_port}")
 
   [[ -n "$extra_args" ]] && { read -ra args_arr <<< "$extra_args"; run_cmd+=("${args_arr[@]}"); }
 
