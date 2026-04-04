@@ -102,6 +102,7 @@ cmd_up() {
       while [[ "$sub_done" == "false" ]]; do
         printf "  ${MAUVE}──${NC} ${BOLD}[R]${NC}edeploy | ${BOLD}[I]${NC}nfo | ${RED}[P]${NC}urge | ${BOLD}[S]kip: "
         read -r -n 1 action
+        while read -t 0.05 -r -n 100; do :; done # Clean buffer
         echo
         
         case "${action,,}" in
@@ -277,15 +278,19 @@ cmd_status() {
 
   printf "  ${BOLD}${SUBTEXT}%-20s %-12s %-8s %s${NC}\n" "CONTAINER" "STATUS" "PORT" "IMAGE"
   separator
-  docker ps --format '{{.Names}}|{{.Status}}|{{.Ports}}|{{.Image}}' 2>/dev/null \
-  | while IFS='|' read -r name status ports image; do
-      local col=$GREEN
-      [[ "$status" != Up* ]] && col=$RED
-      image_short="${image##*/}"
-      port_short=$(echo "$ports" | grep -oP ':\K[0-9]+(?=->)' | head -1)
-      printf "  ${col}%-20s${NC} %-12s ${TEAL}%-8s${NC} ${DIM}%s${NC}\n" \
-        "$name" "$(echo "$status" | cut -c1-12)" ":${port_short}" "$image_short"
-    done
+    docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null \
+    | while IFS='|' read -r name status image; do
+        local col=$GREEN
+        [[ "$status" != Up* ]] && col=$RED
+        image_short="${image##*/}"
+        
+        # Get the primary port from our state file
+        local port_state; port_state=$(state_get ".services.${name}.port")
+        [[ -z "$port_state" ]] && port_state="N/A"
+        
+        printf "  ${col}%-20s${NC} %-12s ${TEAL}%-8s${NC} ${DIM}%s${NC}\n" \
+          "$name" "$(echo "$status" | cut -c1-12)" ":${port_state}" "$image_short"
+      done
 
   separator
   local total used free
