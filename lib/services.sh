@@ -25,7 +25,7 @@ SERVICES=(
   [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|8920:8920,7359:7359/udp,1900:1900/udp||"
   [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
   [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080,TORRENTING_PORT=6881|6881:6881,6881:6881/udp|${MEDIA_DIR}/downloads:/downloads|"
-  [navidrome]="lscr.io/linuxserver/navidrome:latest|4533|navidrome|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}/music:/music|"
+  [navidrome]="deluan/navidrome:latest|4533|navidrome|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}/music:/music|"
 )
 
 declare -A SERVICE_DESCRIPTIONS
