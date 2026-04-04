@@ -44,11 +44,21 @@ cmd_up() {
     local req_ram="${reqs%%|*}"
     local tag="" tag_color=$NC
 
-    if [[ "$(state_get ".services.${key}.status")" == "running" ]]; then
-      tag="[RUNNING]"; tag_color=$GREEN
-    elif (( free_ram < req_ram )); then
-      tag="[OUT OF RAM]"; tag_color=$RED
-    fi
+    # Resolve dynamic docker status
+    local docker_status
+    docker_status=$(docker inspect -f '{{.State.Status}}' "$key" 2>/dev/null || echo "none")
+
+    case "$docker_status" in
+      running)    tag="[RUNNING]";  tag_color=$GREEN ;;
+      exited)     tag="[OFFLINE]";  tag_color=$RED ;;
+      created)    tag="[CREATED]";  tag_color=$YELLOW ;;
+      restarting) tag="[RESTARTING]"; tag_color=$MAUVE ;;
+      *)
+        if (( free_ram < req_ram )); then
+          tag="[OUT OF RAM]"; tag_color=$RED
+        fi
+        ;;
+    esac
 
     printf "  ${MAUVE}%2d)${NC} ${BOLD}%-15s${NC} ${DIM}${SUBTEXT}%-40s${NC} ${tag_color}%s${NC}\n" \
       "$i" "$key" "$desc" "$tag"
@@ -84,12 +94,34 @@ cmd_up() {
       continue
     fi
 
-    if [[ "$(state_get ".services.${selected}.status")" == "running" ]]; then
-      if confirm "'${selected}' is already deployed. Redeploy?"; then
-        docker rm -f "$selected" &>> "$LOG_FILE" || true
-      else
-        continue
-      fi
+    if docker container inspect "$selected" &>/dev/null; then
+      local d_status; d_status=$(docker inspect -f '{{.State.Status}}' "$selected")
+      warn "'${selected}' container is currently ${d_status}."
+      echo -e "  ${MAUVE}1)${NC} ${BOLD}Redeploy${NC}  (Stop and Rebuild)"
+      echo -e "  ${MAUVE}2)${NC} ${BOLD}Info${NC}      (Inspect container config)"
+      echo -e "  ${RED}3)${NC}   ${BOLD}Purge${NC}     (Delete container + all config data)"
+      echo -e "  ${MAUVE}4)${NC} ${BOLD}Skip${NC}"
+      echo
+      prompt "Select action for ${selected}" action
+      
+      case "$action" in
+        1) docker rm -f "$selected" &>> "$LOG_FILE" || true ;;
+        2) 
+          separator
+          docker inspect "$selected" | head -n 40
+          pause
+          continue
+          ;;
+        3) 
+          if confirm "Are you ABSOLUTELY sure you want to PURGE ${selected}?"; then
+            docker rm -f "$selected" &>> "$LOG_FILE" || true
+            sudo rm -rf "${CONFIG_BASE}/${selected}"
+            success "${selected} purged."
+            continue
+          fi
+          ;;
+        *) continue ;;
+      esac
     fi
 
     local p

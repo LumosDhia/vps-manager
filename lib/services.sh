@@ -93,8 +93,8 @@ deploy_service() {
       return 1
     fi
 
-    if [[ "$(state_get ".services.${name}.status")" == "running" ]]; then
-      if confirm "'${name}' is already deployed. Redeploy?"; then
+    if docker container inspect "$name" &>/dev/null; then
+      if confirm "'${name}' container already exists. Rebuild it?"; then
         docker rm -f "$name" &>> "$LOG_FILE" || true
       else
         return
