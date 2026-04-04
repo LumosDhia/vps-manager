@@ -97,31 +97,37 @@ cmd_up() {
     if docker container inspect "$selected" &>/dev/null; then
       local d_status; d_status=$(docker inspect -f '{{.State.Status}}' "$selected")
       warn "'${selected}' container is currently ${d_status}."
-      echo -e "  ${MAUVE}1)${NC} ${BOLD}Redeploy${NC}  (Stop and Rebuild)"
-      echo -e "  ${MAUVE}2)${NC} ${BOLD}Info${NC}      (Inspect container config)"
-      echo -e "  ${RED}3)${NC}   ${BOLD}Purge${NC}     (Delete container + all config data)"
-      echo -e "  ${MAUVE}4)${NC} ${BOLD}Skip${NC}"
-      echo
-      prompt "Select action for ${selected}" action
       
-      case "$action" in
-        1) docker rm -f "$selected" &>> "$LOG_FILE" || true ;;
-        2) 
-          separator
-          docker inspect "$selected" | head -n 40
-          pause
-          continue
-          ;;
-        3) 
-          if confirm "Are you ABSOLUTELY sure you want to PURGE ${selected}?"; then
-            docker rm -f "$selected" &>> "$LOG_FILE" || true
-            sudo rm -rf "${CONFIG_BASE}/${selected}"
-            success "${selected} purged."
-            continue
-          fi
-          ;;
-        *) continue ;;
-      esac
+      local sub_done=false
+      while [[ "$sub_done" == "false" ]]; do
+        printf "  ${MAUVE}──${NC} ${BOLD}[R]${NC}edeploy | ${BOLD}[I]${NC}nfo | ${RED}[P]${NC}urge | ${BOLD}[S]kip: "
+        read -r -n 1 action
+        echo
+        
+        case "${action,,}" in
+          r) 
+            docker rm -f "$selected" &>> "$LOG_FILE" || true 
+            sub_done=true 
+            ;;
+          i) 
+            show_container_info "$selected" 
+            ;;
+          p) 
+            if confirm "Are you ABSOLUTELY sure you want to PURGE ${selected}?"; then
+              docker rm -f "$selected" &>> "$LOG_FILE" || true
+              sudo rm -rf "${CONFIG_BASE}/${selected}"
+              success "${selected} purged."
+              sub_done=true
+              continue 2 # Move to next selected service
+            fi
+            ;;
+          s) 
+            sub_done=true
+            continue 2 # Move to next selected service
+            ;;
+          *) error "Invalid choice. Use R, I, P, or S." ;;
+        esac
+      done
     fi
 
     local p

@@ -107,3 +107,29 @@ run_task() {
     return $exit_code
   fi
 }
+
+# ── Info Viewer ───────────────────────────────────────────────────────────────
+show_container_info() {
+  local name=$1
+  separator
+  printf "  ${BOLD}${BLUE}Container Info: ${name}${NC}\n"
+
+  # Extract via docker inspect
+  local image; image=$(docker inspect -f '{{.Config.Image}}' "$name" 2>/dev/null)
+  local status; status=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)
+  local created; created=$(docker inspect -f '{{.Created}}' "$name" 2>/dev/null | cut -d. -f1)
+  local ip; ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name" 2>/dev/null)
+
+  printf "  ${DIM}%-14s${NC} %s\n" "Image:" "${image}"
+  printf "  ${DIM}%-14s${NC} %s\n" "Status:" "${status}"
+  printf "  ${DIM}%-14s${NC} %s\n" "Created:" "${created}"
+  printf "  ${DIM}%-14s${NC} %s\n" "IP Address:" "${ip:-N/A}"
+
+  printf "\n  ${BOLD}${LAVENDER}Exposed Ports:${NC}\n"
+  docker inspect "$name" --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}  › {{$p}} -> {{.HostPort}}{{println}}{{end}}{{end}}' | sed 's|^|  |' | head -n 10
+
+  printf "\n  ${BOLD}${LAVENDER}Storage Mounts:${NC}\n"
+  docker inspect "$name" --format '{{range .Mounts}}  › {{.Source}} -> {{.Destination}}{{println}}{{end}}' | sed 's|^|  |' | head -n 10
+  separator
+}
+
