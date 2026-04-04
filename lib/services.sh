@@ -75,36 +75,41 @@ is_port_free() {
 
 deploy_service() {
   local name=$1
+  local provided_port=${2:-}
   local def="${SERVICES[$name]}"
   IFS='|' read -r image default_port _unused extra_env extra_ports extra_volumes extra_args <<< "$def"
 
   local cfg_dir="${CONFIG_BASE}/${name}"
   local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
-  local reqs="${SERVICE_REQUIREMENTS[$name]:-256|1000}"
-
-  if ! check_resources "${reqs%%|*}" "${reqs##*|}"; then
-    warn "Deployment aborted due to lack of VPS resources."
-    return 1
-  fi
-
-  if [[ "$(state_get ".services.${name}.status")" == "running" ]]; then
-    if confirm "'${name}' is already deployed. Redeploy?"; then
-      docker rm -f "$name" &>> "$LOG_FILE" || true
-    else
-      return
-    fi
-  fi
-
-  # ── Port selection ──────────────────────────────────────────────────────────
   local port
-  if ! is_port_free "$default_port"; then
-    error "Default port ${default_port} is already in use."
-    prompt "Enter a custom port for ${name}" port
-    [[ -z "$port" ]] && { warn "No port provided. Aborting."; return 1; }
+
+  if [[ -n "$provided_port" ]]; then
+    port="$provided_port"
   else
-    printf "  ${MAUVE}?${NC} ${BOLD}Port for ${name}${NC} [${DIM}default: ${default_port}${NC}]: "
-    read -r port
-    [[ -z "$port" ]] && port="$default_port"
+    # Fallback to interactive logic for manual single calls
+    local reqs="${SERVICE_REQUIREMENTS[$name]:-256|1000}"
+    if ! check_resources "${reqs%%|*}" "${reqs##*|}"; then
+      warn "Deployment aborted due to lack of VPS resources."
+      return 1
+    fi
+
+    if [[ "$(state_get ".services.${name}.status")" == "running" ]]; then
+      if confirm "'${name}' is already deployed. Redeploy?"; then
+        docker rm -f "$name" &>> "$LOG_FILE" || true
+      else
+        return
+      fi
+    fi
+
+    if ! is_port_free "$default_port"; then
+      error "Default port ${default_port} is already in use."
+      prompt "Enter a custom port for ${name}" port
+      [[ -z "$port" ]] && { warn "No port provided. Aborting."; return 1; }
+    else
+      printf "  ${MAUVE}?${NC} ${BOLD}Port for ${name}${NC} [${DIM}default: ${default_port}${NC}]: "
+      read -r port
+      [[ -z "$port" ]] && port="$default_port"
+    fi
   fi
 
   mkdir -p "$cfg_dir"
@@ -114,7 +119,8 @@ deploy_service() {
     run_task "Building custom ${name} image" "docker build -t local-${name}:latest -f $custom_df $DOCKER_FILES_DIR"
     active_image="local-${name}:latest"
   else
-    run_task "Pulling ${name} image" "docker pull $active_image"
+    # If pulled in parallel, this completes instantly
+    run_task "Verifying ${name} image" "docker pull $active_image"
   fi
 
   info "Starting ${name} container..."

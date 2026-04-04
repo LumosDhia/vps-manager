@@ -61,10 +61,12 @@ cmd_up() {
 
   if [[ "$choice" == "0" || -z "$choice" ]]; then pause; return; fi
 
-  # Initialize summary array
-  export MULTI_DEPLOY_SUMMARY=()
+  separator
+  
+  # Pre-flight: Validation & Input Collection
+  declare -a deploy_names
+  declare -A deploy_ports
 
-  # Iterate over all selected numbers
   for c in $choice; do
     local idx=$(( c - 1 ))
     local selected="${menu_keys[$idx]:-}"
@@ -73,9 +75,69 @@ cmd_up() {
       continue
     fi
 
+    local def="${SERVICES[$selected]}"
+    IFS='|' read -r _image default_port _unused <<< "$def"
+    local reqs="${SERVICE_REQUIREMENTS[$selected]:-256|1000}"
+
+    if ! check_resources "${reqs%%|*}" "${reqs##*|}"; then
+      warn "Insufficient resources for ${selected}. Skipping."
+      continue
+    fi
+
+    if [[ "$(state_get ".services.${selected}.status")" == "running" ]]; then
+      if confirm "'${selected}' is already deployed. Redeploy?"; then
+        docker rm -f "$selected" &>> "$LOG_FILE" || true
+      else
+        continue
+      fi
+    fi
+
+    local p
+    if ! is_port_free "$default_port"; then
+      error "Default port ${default_port} for ${selected} is already in use."
+      prompt "Enter a custom port for ${selected}" p
+      [[ -z "$p" ]] && { warn "No port provided for ${selected}. Skipping."; continue; }
+    else
+      printf "  ${MAUVE}?${NC} ${BOLD}Port for ${selected}${NC} [${DIM}default: ${default_port}${NC}]: "
+      read -r p
+      [[ -z "$p" ]] && p="$default_port"
+    fi
+
+    deploy_ports[$selected]="$p"
+    deploy_names+=("$selected")
+  done
+
+  if [[ ${#deploy_names[@]} -eq 0 ]]; then
+    warn "No services queued for deployment."
+    pause
+    return
+  fi
+
+  # Pull Stage: Parallel Pulls
+  separator
+  info "Pre-fetching images for deployment in parallel..."
+  declare -a pull_pids
+  for name in "${deploy_names[@]}"; do
+    local def="${SERVICES[$name]}"
+    IFS='|' read -r image _unused <<< "$def"
+    local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
+    
+    if [[ ! -f "$custom_df" ]]; then
+      docker pull "$image" > /dev/null 2>&1 &
+      pull_pids+=($!)
+    fi
+  done
+  wait "${pull_pids[@]}" 2>/dev/null || true
+  success "External images downloaded."
+
+  # Initialize summary array
+  export MULTI_DEPLOY_SUMMARY=()
+
+  # Launch Stage
+  for name in "${deploy_names[@]}"; do
     separator
-    info "Deploying: ${selected}"
-    deploy_service "$selected"
+    info "Deploying: ${name}"
+    deploy_service "$name" "${deploy_ports[$name]}"
   done
 
   # Process delayed hooks
