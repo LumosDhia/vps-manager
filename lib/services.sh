@@ -158,7 +158,8 @@ deploy_service() {
   if [[ "$name" == "qbittorrent" ]]; then
     info "Retrieving temporary admin password from logs..."
     sleep 5
-    local pass; pass=$(docker logs "$name" 2>&1 | grep -o 'The WebUI administrator password was at: .*' | awk -F': ' '{print $2}')
+    local pass
+    pass=$(docker logs "$name" 2>&1 | grep -o 'The WebUI administrator password was at: .*' | awk -F': ' '{print $2}' || true)
     if [[ -n "$pass" ]]; then
       success "qBittorrent Initial Admin Password: ${BOLD}${pass}${NC}"
       warn "Username: admin | Change this immediately in the WebUI settings!"
