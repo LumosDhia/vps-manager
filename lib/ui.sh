@@ -88,20 +88,22 @@ run_task() {
   local cmd="$2"
 
   info "$msg..."
-  echo -e "  ${DIM}┌────────────────────────────────────────────────────────┐${NC}"
+  echo -e "  ${DIM}┌────────────────────────────────────────────────────────────────────────┐${NC}"
 
   set +e
-  eval "$cmd" 2>&1 | while IFS= read -r line; do
-    printf "  ${DIM}│${NC} %-54s ${DIM}│${NC}\n" "${line:0:54}"
+  eval "$cmd" 2>&1 | tee -a "$LOG_FILE" | while IFS= read -r line; do
+    # Remove ANSI codes for counting length correctly (optional, but good for raw text)
+    # Print up to 70 chars to fit standard wide terminal
+    printf "  ${DIM}│${NC} %-70s ${DIM}│${NC}\n" "${line:0:70}"
   done
   local exit_code=${PIPESTATUS[0]}
   set -e
 
   if [[ $exit_code -eq 0 ]]; then
-    echo -e "  ${DIM}└────────────────────────────────────────────────────────┘${NC}"
+    echo -e "  ${DIM}└────────────────────────────────────────────────────────────────────────┘${NC}"
     return 0
   else
-    echo -e "  ${RED}└──────────────────────────────────────────── FAILED ────┘${NC}"
+    echo -e "  ${RED}└──────────────────────────────────────────────────────── FAILED ────┘${NC}"
     return $exit_code
   fi
 }
