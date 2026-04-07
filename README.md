@@ -15,7 +15,6 @@ Setting up a home server on a cloud provider usually involves manual firewall co
 ## Prerequisites
 
 - Operating System: Ubuntu 22.04+ or Debian 12+.
-- Architecture: x86_64 or arm64.
 - Permissions: Must be run with a sudo-capable user.
 - Packages: git, curl, jq, gawk, openssl.
 
@@ -41,7 +40,6 @@ Follow the menu instructions. It is recommended to run "Initialize VPS" first to
 
 ## Features
 
-- **Catppuccin Palette**: High-fidelity terminal colors using ANSI escapes.
 - **State Persistence**: Service data is tracked in a JSON-based local database.
 - **Parallel Pulls**: Images are fetched in the background to speed up bulk deployments.
 - **Firewall Integration**: Automatically syncs service ports with UFW rules.
