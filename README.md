@@ -1,3 +1,5 @@
+![Logo](assets/logo.png)
+
 # VPS Home Server Manager
 
 This toolkit is an interactive bash script to deploy and manage web services on personal VPS (Ubuntu or Debian). It uses Docker as the core engine and provides a Catppuccin themed CLI for visibility.
