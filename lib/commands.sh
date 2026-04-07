@@ -296,30 +296,24 @@ cmd_status() {
   label "Health Dashboard"
   echo
 
-  printf "  ${BOLD}${SUBTEXT}%-20s %-12s %-8s %s${NC}\n" "CONTAINER" "STATUS" "PORT" "IMAGE"
+  printf "  ${BOLD}${SUBTEXT}%-22s %-12s %-20s %s${NC}\n" "CONTAINER" "STATUS" "PORTS" "IMAGE"
   separator
-    docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' 2>/dev/null \
-    | while IFS='|' read -r name status image; do
+    docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}' 2>/dev/null \
+    | while IFS='|' read -r name status image ports; do
         local col=$GREEN
         [[ "$status" != Up* ]] && col=$RED
         image_short="${image##*/}"
         
-        # Get the primary port from our state file
-        local port_state; port_state=$(state_get ".services.${name}.port")
-        
-        # Special case for Nginx Proxy Manager (which is a core infra component)
-        if [[ "$name" == "nginx-proxy-manager" ]]; then
-          port_state="81"
-        fi
-        
-        [[ -z "$port_state" ]] && port_state="N/A"
+        # Extract all unique host ports (both 0.0.0.0 and [::]) and sort them numerically
+        local p; p=$(echo "$ports" | grep -oP '(?<=0.0.0.0:)[0-9-]+(?=->)|(?<=\[::\]:)[0-9-]+(?=->)' | sort -un | paste -sd ',' -)
+        [[ -z "$p" ]] && p="N/A"
         
         # Clean status string: remove anything in parentheses (health checks) 
         # and limit to the core "Up X time" part
         local cleaner_status; cleaner_status=$(echo "$status" | sed 's/ (.*//' | cut -c1-12)
         
-        printf "  ${col}%-20s${NC} %-12s ${TEAL}%-8s${NC} ${DIM}%s${NC}\n" \
-          "$name" "$cleaner_status" ":${port_state}" "$image_short"
+        printf "  ${col}%-22s${NC} %-12s ${TEAL}%-20s${NC} ${DIM}%s${NC}\n" \
+          "$name" "$cleaner_status" "$p" "$image_short"
       done
 
   separator

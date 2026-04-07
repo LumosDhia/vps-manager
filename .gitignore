@@ -11,3 +11,4 @@ mgr_test_*.sh
 manager_test_*.sh
 vps_state_*.json
 vps_log_*.log
+cv.txt

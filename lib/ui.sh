@@ -135,13 +135,23 @@ show_container_info() {
   printf "  ${BOLD}${LAVENDER}Port Mappings${NC}\n"
   docker inspect "$name" --format '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{$p}} -> {{.HostPort}}{{println}}{{end}}{{end}}' | grep "\->" | sort -u | sed 's|^|    › |' | head -n 10
   
-  # 3. Last Logs (for passwords)
+  # 3. First and Last Logs
   echo
-  printf "  ${BOLD}${PEACH}Recent Logs (Last 20 lines)${NC}\n"
+  printf "  ${BOLD}${PEACH}Logs (First 20 & Last 20 lines)${NC}\n"
   echo -e "  ${DIM}────────────────────────────────────────────────────────────────────────${NC}"
-  docker logs --tail 20 "$name" 2>&1 | while IFS= read -r line; do
+  
+  # Display first 20 lines
+  docker logs "$name" 2>&1 | head -n 20 | while IFS= read -r line; do
     printf "  ${DIM}│${NC} %s\n" "$line"
   done
+
+  # Check if there are more than 20 lines to determine if we show the tail
+  if [[ $(docker logs "$name" 2>&1 | head -n 21 | wc -l) -eq 21 ]]; then
+    printf "  ${DIM}│${NC} ${DIM}... [Middle Logs Omitted] ...${NC}\n"
+    docker logs --tail 20 "$name" 2>&1 | while IFS= read -r line; do
+      printf "  ${DIM}│${NC} %s\n" "$line"
+    done
+  fi
   echo -e "  ${DIM}────────────────────────────────────────────────────────────────────────${NC}"
   
   echo

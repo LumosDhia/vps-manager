@@ -1,39 +1,47 @@
-# VPS Security Guide
+# VPS Home Server Manager
 
-## Updating your system
-- `sudo apt update` - Update the package list.
-- `sudo apt upgrade` - Upgrade the software packages.
+This toolkit is an interactive bash script to deploy and manage web services on personal VPS (Ubuntu or Debian). It uses Docker as the core engine and provides a Catppuccin themed CLI for visibility.
 
-## Create and use an SSH key
-- `ssh-keygen -t ed25519` - Generate an SSH key pair on your local machine.
-- `ssh-copy-id -i ~/.ssh/id_ed25519.pub username@server_ip` - Deploy the public key to the VPS.
+## What is this for?
 
-## Changing the default SSH listening port
-- `sudo nano /etc/ssh/sshd_config` - Modify the service configuration file.
-- `sudo cat /etc/services` - View the ports currently assigned on the system.
-- `sudo systemctl restart sshd` - Restart the SSH service.
-- `sudo reboot` - Reboot the VPS to apply changes.
-- `sudo nano /lib/systemd/system/ssh.socket` - Update the ListenStream for Ubuntu 24.04 and later.
-- `sudo systemctl daemon-reload` - Reload systemd manager configuration.
-- `sudo systemctl restart ssh.socket` - Restart the SSH socket service.
-- `ssh username@IPv4_VPS -p NewPortNumber` - Connect to the server using the new SSH port.
+Setting up a home server on a cloud provider usually involves manual firewall configuration, reverse proxy setup, and persistent data management. This project automates those steps:
 
-## Creating a user with restricted rights
-- `adduser <username>` - Create a new standard user.
-- `usermod -aG sudo <username>` - Grant the user administrative (sudo) privileges.
+- Automated system bootstrapping (Docker, Network, Firewall).
+- App store interface to deploy pre-configured services (Home dashboards, Cloud storage, Media servers).
+- Built-in reverse proxy (Nginx Proxy Manager) with automatic SSL provisioning.
+- Real-time health dashboard for monitoring container status and system resources.
+- Global security auditing (Doctor command) to check for resource leaks and SSL expiry.
 
-## Configuring the internal firewall (iptables)
-- `iptables -L` - Verify active firewall rules.
+## Prerequisites
 
-## Installing Fail2ban
-- `sudo apt install fail2ban` - Install the Fail2ban package.
-- `sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local` - Create a local configuration file.
-- `sudo nano /etc/fail2ban/jail.local` - Open the local configuration file for editing.
-- `sudo systemctl restart fail2ban` - Restart the Fail2ban service using systemctl.
-- `sudo service fail2ban restart` - Restart the Fail2ban service using legacy method.
+- Operating System: Ubuntu 22.04+ or Debian 12+.
+- Architecture: x86_64 or arm64.
+- Permissions: Must be run with a sudo-capable user.
+- Packages: git, curl, jq, gawk, openssl.
 
-## Configuring the OVHcloud Network Firewall
-- (Managed via the OVHcloud Control Panel; no local commands)
+## Quick Start
 
-## Backing up your system and your data
-- (Use the backup/snapshot tools available in the OVHcloud Control Panel)
+Download the repository and run the entry script:
+
+```bash
+git clone https://github.com/LumosDhia/vps-setup.git
+cd vps-setup
+chmod +x manager.sh
+./manager.sh
+```
+
+Follow the menu instructions. It is recommended to run "Initialize VPS" first to set up the foundation.
+
+## Project Architecture
+
+- **manager.sh**: Entry point for the CLI.
+- **lib/**: Modularized logic for UI, infrastructure, services, and command handling.
+- **docker-files/**: Supplemental configuration and custom Dockerfiles for integrated apps.
+- **~/.config/personal-server/**: Default path for local persistent configs.
+
+## Features
+
+- **Catppuccin Palette**: High-fidelity terminal colors using ANSI escapes.
+- **State Persistence**: Service data is tracked in a JSON-based local database.
+- **Parallel Pulls**: Images are fetched in the background to speed up bulk deployments.
+- **Firewall Integration**: Automatically syncs service ports with UFW rules.

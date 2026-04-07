@@ -14,8 +14,8 @@
 declare -A SERVICES
 SERVICES=(
   # ── Tier 1: Management ────────────────────────────────────────────────────
-  [homarr]="ghcr.io/homarr-labs/homarr:latest|7575|homarr|SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006||/var/run/docker.sock:/var/run/docker.sock|"
-  [portainer]="portainer/portainer-ce:latest|9000|portainer|||/var/run/docker.sock:/var/run/docker.sock|"
+  [homarr]="ghcr.io/homarr-labs/homarr:latest|7575|homarr:appdata|SECRET_ENCRYPTION_KEY=1097939ab64487e6072404d50abf337500adc4bf838c628dc0f60612daef3006||/var/run/docker.sock:/var/run/docker.sock|"
+  [portainer]="portainer/portainer-ce:latest|9000|portainer:data|||/var/run/docker.sock:/var/run/docker.sock|"
 
   # ── Tier 2: Personal Cloud ────────────────────────────────────────────────
   [filebrowser]="filebrowser/filebrowser:s6|8080|filebrowser|PUID=1000,PGID=1000,TZ=Africa/Tunis|:80|${MEDIA_DIR}:/srv|"
@@ -25,7 +25,7 @@ SERVICES=(
   [jellyfin]="lscr.io/linuxserver/jellyfin:latest|8096|jellyfin|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
   [prowlarr]="lscr.io/linuxserver/prowlarr:latest|9696|prowlarr|PUID=1000,PGID=1000,TZ=Africa/Tunis|||"
   [qbittorrent]="lscr.io/linuxserver/qbittorrent:latest|8080|qbittorrent|PUID=1000,PGID=1000,TZ=Africa/Tunis,WEBUI_PORT=8080||${MEDIA_DIR}/downloads:/downloads|"
-  [navidrome]="deluan/navidrome:latest|4533|navidrome|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}/music:/music|"
+  [navidrome]="deluan/navidrome:latest|4533|navidrome:data|PUID=1000,PGID=1000,TZ=Africa/Tunis,ND_UILOGINBACKGROUNDURL=https://wallpapercave.com/wp/wp11990842.jpg,ND_DEFAULTTHEME=Catppuccin Macchiato||${MEDIA_DIR}/music:/music|"
   [kavita]="lscr.io/linuxserver/kavita:latest|5000|kavita|PUID=1000,PGID=1000,TZ=Africa/Tunis||${MEDIA_DIR}:/media|"
 )
 
@@ -69,9 +69,13 @@ deploy_service() {
   local def="${SERVICES[$name]}"
   [[ -z "$def" ]] && die "Service ${name} not defined in catalog."
 
-  IFS='|' read -r image default_port _dir extra_env extra_ports extra_volumes extra_args <<< "$def"
+  # Handle custom internal config mapping if specified as "dir:internal_path"
+  local cfg_name_only="${_dir%%:*}"
+  local internal_cfg_path="${_dir#*:}"
+  # Default to /config if no internal path specified
+  [[ "$internal_cfg_path" == "$_dir" ]] && internal_cfg_path="/config"
 
-  local cfg_dir="${CONFIG_BASE}/${name}"
+  local cfg_dir="${CONFIG_BASE}/${cfg_name_only}"
   mkdir -p "$cfg_dir"
 
   # Pre-flight: Pull image
@@ -102,7 +106,7 @@ deploy_service() {
     sudo ufw allow "$port"/tcp &>> "$LOG_FILE" || true
   fi
 
-  run_cmd+=(-v "${cfg_dir}:/config")
+  run_cmd+=(-v "${cfg_dir}:${internal_cfg_path}")
   run_cmd+=(-v "${MEDIA_DIR}:${MEDIA_DIR}")
 
   if [[ -n "$extra_volumes" ]]; then
