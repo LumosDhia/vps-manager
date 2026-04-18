@@ -156,19 +156,35 @@ deploy_service() {
 
   # ── Post-deploy hooks ──────────────────────────────────────────────────────
   if [[ "$name" == "qbittorrent" ]]; then
-    info "Applying 'Unauthorized' fix (disabling Host Header Validation)..."
-    sleep 2 # Wait for config to be generated
+    info "Applying robust 'Unauthorized' fix..."
     local conf_file="${cfg_dir}/qBittorrent/qBittorrent.conf"
+    
+    # Wait for config to be generated (up to 20s)
+    local retries=10
+    while [[ ! -f "$conf_file" && $retries -gt 0 ]]; do
+      sleep 2
+      ((retries--))
+    done
+
     if [[ -f "$conf_file" ]]; then
-      # Ensure the [Preferences] section exists or just append/replace
-      if grep -q "WebUI\\\\HostHeaderValidation" "$conf_file"; then
-        sed -i 's/WebUI\\HostHeaderValidation=.*/WebUI\\HostHeaderValidation=false/' "$conf_file"
+      # Stop to ensure it doesn't overwrite our changes
+      docker stop "$name" > /dev/null
+      
+      # Remove any existing entries to avoid duplicates
+      sed -i '/WebUI\\HostHeaderValidation/d' "$conf_file"
+      sed -i '/WebUI\\CSRFProtection/d' "$conf_file"
+      
+      # Add bypasses under [Preferences]
+      if grep -q "\[Preferences\]" "$conf_file"; then
+        sed -i '/\[Preferences\]/a WebUI\\HostHeaderValidation=false\nWebUI\\CSRFProtection=false' "$conf_file"
       else
-        # Append to the end of the file or ideally under [Preferences]
-        echo "WebUI\\HostHeaderValidation=false" >> "$conf_file"
+        echo -e "\n[Preferences]\nWebUI\\HostHeaderValidation=false\nWebUI\\CSRFProtection=false" >> "$conf_file"
       fi
-      docker restart "$name" > /dev/null
-      success "qBittorrent settings adjusted. Restarted container."
+      
+      docker start "$name" > /dev/null
+      success "qBittorrent security checks bypassed successfully."
+    else
+      warn "qBittorrent.conf not found after waiting. You may need to restart manually."
     fi
     # Flag for cmd_up to show the password
     export QBITTORRENT_CHECK_PASSWORD=true
