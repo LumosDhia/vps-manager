@@ -76,8 +76,13 @@ deploy_service() {
   # Handle custom internal config mapping if specified as "dir:internal_path"
   local cfg_name_only="${_dir%%:*}"
   local internal_cfg_path="${_dir#*:}"
-  # Default to /config if no internal path specified
-  [[ "$internal_cfg_path" == "$_dir" ]] && internal_cfg_path="/config"
+  
+  # Ensure internal path is absolute
+  if [[ "$internal_cfg_path" == "$_dir" ]]; then
+    internal_cfg_path="/config"
+  elif [[ "$internal_cfg_path" != /* ]]; then
+    internal_cfg_path="/${internal_cfg_path}"
+  fi
 
   local cfg_dir="${CONFIG_BASE}/${cfg_name_only}"
   mkdir -p "$cfg_dir"
