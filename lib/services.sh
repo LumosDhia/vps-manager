@@ -69,6 +69,10 @@ deploy_service() {
   local def="${SERVICES[$name]}"
   [[ -z "$def" ]] && die "Service ${name} not defined in catalog."
 
+  # Parse service definition into local variables
+  local image default_port _dir extra_env extra_ports extra_volumes extra_args
+  IFS='|' read -r image default_port _dir extra_env extra_ports extra_volumes extra_args <<< "$def"
+
   # Handle custom internal config mapping if specified as "dir:internal_path"
   local cfg_name_only="${_dir%%:*}"
   local internal_cfg_path="${_dir#*:}"
@@ -78,9 +82,16 @@ deploy_service() {
   local cfg_dir="${CONFIG_BASE}/${cfg_name_only}"
   mkdir -p "$cfg_dir"
 
-  # Pre-flight: Pull image
-  run_task "Verifying ${name} image" "docker pull ${image}"
+  # Pre-flight: Build or Pull image
+  local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
   local active_image="$image"
+  
+  if [[ -f "$custom_df" ]]; then
+    run_task "Building custom ${name} image" "docker build -t local-${name}:latest -f $custom_df $DOCKER_FILES_DIR"
+    active_image="local-${name}:latest"
+  else
+    run_task "Verifying ${name} image" "docker pull ${image}"
+  fi
 
   info "Starting ${name} container..."
   local run_cmd=(docker run -d --name "$name" --restart unless-stopped)
@@ -94,9 +105,14 @@ deploy_service() {
   fi
   run_cmd+=(-p "${port}:${internal_port}")
 
-  [[ -n "$extra_args" ]] && { read -ra args_arr <<< "$extra_args"; run_cmd+=("${args_arr[@]}"); }
+  if [[ -n "$extra_args" ]]; then
+    local args_arr
+    read -ra args_arr <<< "$extra_args"
+    run_cmd+=("${args_arr[@]}")
+  fi
 
   if [[ -n "$extra_ports" ]]; then
+    local port_arr ep
     IFS=',' read -ra port_arr <<< "$extra_ports"
     for ep in "${port_arr[@]}"; do run_cmd+=(-p "$ep"); done
   fi
@@ -110,6 +126,7 @@ deploy_service() {
   run_cmd+=(-v "${MEDIA_DIR}:${MEDIA_DIR}")
 
   if [[ -n "$extra_volumes" ]]; then
+    local vol_arr ev
     IFS=',' read -ra vol_arr <<< "$extra_volumes"
     for ev in "${vol_arr[@]}"; do
       run_cmd+=(-v "${ev//CFG_DIR/$cfg_dir}")
@@ -117,13 +134,9 @@ deploy_service() {
   fi
 
   if [[ -n "$extra_env" ]]; then
+    local env_arr e
     IFS=',' read -ra env_arr <<< "$extra_env"
     for e in "${env_arr[@]}"; do run_cmd+=(-e "$e"); done
-  fi
-
-  # ── Smart overrides for specific services ──────────────────────────────────────
-  if [[ "$name" == "qbittorrent" ]]; then
-    run_cmd+=(-e "WEBUI_PORT=${port}")
   fi
 
   run_cmd+=("$active_image")

@@ -85,6 +85,7 @@ cmd_up() {
     fi
 
     local def="${SERVICES[$selected]}"
+    local _image default_port _unused
     IFS='|' read -r _image default_port _unused <<< "$def"
     local reqs="${SERVICE_REQUIREMENTS[$selected]:-256|1000}"
 
@@ -157,6 +158,7 @@ cmd_up() {
   declare -a pull_pids
   for name in "${deploy_names[@]}"; do
     local def="${SERVICES[$name]}"
+    local image _unused
     IFS='|' read -r image _unused <<< "$def"
     local custom_df="${DOCKER_FILES_DIR}/${name}-dockerfile"
     
