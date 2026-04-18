@@ -145,7 +145,7 @@ deploy_service() {
   fi
 
   run_cmd+=("$active_image")
-  run_task "Launching container" "${run_cmd[*]}"
+  run_task "Launching container" "$(printf "%q " "${run_cmd[@]}")"
 
   state_set_service "$name" "$port" "running"
   success "${name} deployed on port ${port}.  Config: ${cfg_dir}"
