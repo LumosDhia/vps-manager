@@ -181,17 +181,17 @@ cmd_up() {
     deploy_service "$name" "${deploy_ports[$name]}"
   done
 
-  # Process delayed hooks
   if [[ "${QBITTORRENT_CHECK_PASSWORD:-}" == "true" ]]; then
     separator
-    info "Retrieving temporary qBittorrent admin password from logs..."
-    sleep 3 # Give it a little more time to settle
+    info "Retrieving temporary qBittorrent admin password..."
+    sleep 5 # Give it more time to log the password
     local pass
-    pass=$(docker logs qbittorrent 2>&1 | grep -o 'The WebUI administrator password was at: .*' | awk -F': ' '{print $2}' || true)
+    pass=$(docker logs qbittorrent 2>&1 | grep -i "password" | grep -v "already" | tail -n 1 | awk -F': ' '{print $2}' | xargs || true)
+    
     if [[ -n "$pass" ]]; then
       MULTI_DEPLOY_SUMMARY+=("      ${ARR} ${YELLOW}qBittorrent Admin Password: ${BOLD}${pass}${NC}")
     else
-      MULTI_DEPLOY_SUMMARY+=("      ${ARR} ${RED}qBittorrent Password not found in logs yet. Check manually: docker logs qbittorrent${NC}")
+      MULTI_DEPLOY_SUMMARY+=("      ${ARR} ${RED}qBittorrent Password not found. Default is usually 'adminadmin' or check 'docker logs qbittorrent'${NC}")
     fi
     unset QBITTORRENT_CHECK_PASSWORD
   fi

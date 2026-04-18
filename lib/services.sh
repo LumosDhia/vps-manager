@@ -156,7 +156,21 @@ deploy_service() {
 
   # ── Post-deploy hooks ──────────────────────────────────────────────────────
   if [[ "$name" == "qbittorrent" ]]; then
-    # We delay password fetching to give container time to start while other things deploy
+    info "Applying 'Unauthorized' fix (disabling Host Header Validation)..."
+    sleep 2 # Wait for config to be generated
+    local conf_file="${cfg_dir}/qBittorrent/qBittorrent.conf"
+    if [[ -f "$conf_file" ]]; then
+      # Ensure the [Preferences] section exists or just append/replace
+      if grep -q "WebUI\\\\HostHeaderValidation" "$conf_file"; then
+        sed -i 's/WebUI\\HostHeaderValidation=.*/WebUI\\HostHeaderValidation=false/' "$conf_file"
+      else
+        # Append to the end of the file or ideally under [Preferences]
+        echo "WebUI\\HostHeaderValidation=false" >> "$conf_file"
+      fi
+      docker restart "$name" > /dev/null
+      success "qBittorrent settings adjusted. Restarted container."
+    fi
+    # Flag for cmd_up to show the password
     export QBITTORRENT_CHECK_PASSWORD=true
   fi
 }
