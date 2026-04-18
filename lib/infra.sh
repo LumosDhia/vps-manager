@@ -57,6 +57,10 @@ handle_user() {
     cp -r "${SCRIPT_DIR}/lib" "/home/${TARGET_USER}/lib"
     chown -R "${TARGET_USER}:${TARGET_USER}" "$target_script" "/home/${TARGET_USER}/lib"
 
+    # Ensure the target user owns their own home config directory if it exists
+    local target_home="/home/${TARGET_USER}"
+    [[ -d "${target_home}/.config" ]] && chown -R "${TARGET_USER}:${TARGET_USER}" "${target_home}/.config"
+
     info "Transitioning session to '${TARGET_USER}'..."
     exec sudo -u "$TARGET_USER" -H bash "$target_script" --child "$@"
   fi
@@ -139,6 +143,17 @@ setup_media_dir() {
   mkdir -p "${MEDIA_DIR}/movies" "${MEDIA_DIR}/tv" "${MEDIA_DIR}/music" \
            "${MEDIA_DIR}/books" "${MEDIA_DIR}/downloads"
   success "Media sub-dirs ready: movies/ tv/ music/ books/ downloads/"
+}
+
+# ── Configuration Directory ───────────────────────────────────────────────────
+
+setup_config_dir() {
+  if [[ ! -d "$CONFIG_BASE" ]]; then
+    info "Creating configuration base at ${CONFIG_BASE}..."
+    sudo mkdir -p "$CONFIG_BASE"
+  fi
+  sudo chown -R "${USER}:${USER}" "$CONFIG_BASE"
+  success "Configuration directory ready and owned by ${USER}."
 }
 
 # ── Reverse Proxy ─────────────────────────────────────────────────────────────

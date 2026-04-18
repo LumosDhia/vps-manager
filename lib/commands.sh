@@ -18,6 +18,7 @@ cmd_initialize() {
   setup_network
   setup_firewall
   setup_media_dir
+  setup_config_dir
   deploy_reverse_proxy
   separator
 
